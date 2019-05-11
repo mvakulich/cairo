@@ -332,7 +332,7 @@ cairo_quartz_image_surface_create (cairo_surface_t *surface)
     if (format != CAIRO_FORMAT_ARGB32 && format != CAIRO_FORMAT_RGB24)
 	return SURFACE_ERROR_INVALID_FORMAT;
 
-    qisurf = malloc(sizeof(cairo_quartz_image_surface_t));
+    qisurf = _cairo_malloc (sizeof(cairo_quartz_image_surface_t));
     if (qisurf == NULL)
 	return SURFACE_ERROR_NO_MEMORY;
 
@@ -361,7 +361,8 @@ cairo_quartz_image_surface_create (cairo_surface_t *surface)
     _cairo_surface_init (&qisurf->base,
 			 &cairo_quartz_image_surface_backend,
 			 NULL, /* device */
-			 _cairo_content_from_format (format));
+			 _cairo_content_from_format (format),
+			 FALSE); /* is_vector */
 
     qisurf->width = width;
     qisurf->height = height;
@@ -378,8 +379,10 @@ cairo_quartz_image_surface_get_image (cairo_surface_t *asurface)
 {
     cairo_quartz_image_surface_t *surface = (cairo_quartz_image_surface_t*) asurface;
 
-    if (asurface->type != CAIRO_SURFACE_TYPE_QUARTZ_IMAGE)
-	return NULL;
+    /* Throw an error for a non-quartz surface */
+    if (! _cairo_surface_is_quartz (asurface)) {
+        return _cairo_surface_create_in_error (_cairo_error (CAIRO_STATUS_SURFACE_TYPE_MISMATCH));
+    }
 
     return (cairo_surface_t*) surface->imageSurface;
 }

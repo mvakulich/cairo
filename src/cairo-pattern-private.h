@@ -256,6 +256,11 @@ _cairo_gradient_pattern_is_solid (const cairo_gradient_pattern_t *gradient,
 				  const cairo_rectangle_int_t *extents,
 				  cairo_color_t *color);
 
+cairo_private cairo_bool_t
+_cairo_pattern_is_constant_alpha (const cairo_pattern_t          *abstract_pattern,
+				  const cairo_rectangle_int_t    *extents,
+				  double                         *alpha);
+
 cairo_private void
 _cairo_gradient_pattern_fit_to_range (const cairo_gradient_pattern_t *gradient,
 				      double			      max_value,
@@ -289,14 +294,15 @@ _cairo_mesh_pattern_coord_box (const cairo_mesh_pattern_t *mesh,
 			       double                     *out_xmax,
 			       double                     *out_ymax);
 
-cairo_private_no_warn cairo_filter_t
+cairo_private void
 _cairo_pattern_sampled_area (const cairo_pattern_t *pattern,
 			     const cairo_rectangle_int_t *extents,
 			     cairo_rectangle_int_t *sample);
 
 cairo_private void
 _cairo_pattern_get_extents (const cairo_pattern_t	    *pattern,
-			    cairo_rectangle_int_t           *extents);
+			    cairo_rectangle_int_t           *extents,
+			    cairo_bool_t                   is_vector);
 
 cairo_private cairo_int_status_t
 _cairo_pattern_get_ink_extents (const cairo_pattern_t	    *pattern,
@@ -327,6 +333,9 @@ _cairo_radial_pattern_equal (const cairo_radial_pattern_t *a,
 cairo_private cairo_bool_t
 _cairo_pattern_equal (const cairo_pattern_t *a,
 		      const cairo_pattern_t *b);
+
+cairo_private cairo_filter_t
+_cairo_pattern_analyze_filter (const cairo_pattern_t *pattern);
 
 /* cairo-mesh-pattern-rasterizer.c */
 

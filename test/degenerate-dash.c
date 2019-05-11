@@ -1,5 +1,5 @@
 /*
- * Copyright © 2008 Chris Wilson
+ * Copyright Â© 2008 Chris Wilson
  *
  * Permission to use, copy, modify, distribute, and sell this software
  * and its documentation for any purpose is hereby granted without
@@ -85,6 +85,6 @@ draw (cairo_t *cr, int width, int height)
 CAIRO_TEST (degenerate_dash,
 	    "Tests the behaviour of dashed segments that end on a off-on transition",
 	    "dash, degenerate", /* keywords */
-	    NULL, /* requirementts */
+	    NULL, /* requirements */
 	    210 + 2*PAD, 210 + 2*PAD,
 	    NULL, draw)

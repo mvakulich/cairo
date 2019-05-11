@@ -6,13 +6,13 @@
 # float word ordering can be different from the byte ordering. In a
 # multi-word float context, "big-endian" implies that the word containing
 # the sign bit is found in the memory location with the lowest address.
-# This implemenation was inspired by the AC_C_BIGENDIAN macro in autoconf.
+# This implementation was inspired by the AC_C_BIGENDIAN macro in autoconf.
 # -------------------------------------------------------------------------
 AC_DEFUN([AX_C_FLOAT_WORDS_BIGENDIAN],
   [AC_CACHE_CHECK(whether float word ordering is bigendian,
                   ax_cv_c_float_words_bigendian, [
 
-# The endianess is detected by first compiling C code that contains a special
+# The endianness is detected by first compiling C code that contains a special
 # double float value, then grepping the resulting object file for certain
 # strings of ascii values. The double is specially crafted to have a
 # binary representation that corresponds with a simple string. In this
@@ -24,16 +24,17 @@ AC_DEFUN([AX_C_FLOAT_WORDS_BIGENDIAN],
 # is found, the user is instructed to specify the ordering.
 
 ax_cv_c_float_words_bigendian=unknown
-AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
+AC_LINK_IFELSE([AC_LANG_SOURCE([[
 
-double d = 90904234967036810337470478905505011476211692735615632014797120844053488865816695273723469097858056257517020191247487429516932130503560650002327564517570778480236724525140520121371739201496540132640109977779420565776568942592.0;
+double d __attribute__((used)) = 90904234967036810337470478905505011476211692735615632014797120844053488865816695273723469097858056257517020191247487429516932130503560650002327564517570778480236724525140520121371739201496540132640109977779420565776568942592.0;
+int main() { return 0; }
 
 ]])], [
 
-if strings - conftest.$ac_objext | grep noonsees >/dev/null ; then
+if strings -a conftest$ac_exeext | grep noonsees >/dev/null ; then
   ax_cv_c_float_words_bigendian=yes
 fi
-if strings - conftest.$ac_objext | grep seesnoon >/dev/null ; then
+if strings -a conftest$ac_exeext | grep seesnoon >/dev/null ; then
   if test "$ax_cv_c_float_words_bigendian" = unknown; then
     ax_cv_c_float_words_bigendian=no
   else

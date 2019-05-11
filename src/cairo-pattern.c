@@ -357,6 +357,7 @@ _cairo_pattern_init_copy (cairo_pattern_t	*pattern,
     /* The reference count and user_data array are unique to the copy. */
     CAIRO_REFERENCE_COUNT_INIT (&pattern->ref_count, 0);
     _cairo_user_data_array_init (&pattern->user_data);
+    cairo_list_init (&pattern->observers);
 
     return CAIRO_STATUS_SUCCESS;
 }
@@ -396,6 +397,7 @@ _cairo_pattern_init_static_copy (cairo_pattern_t	*pattern,
 
     CAIRO_REFERENCE_COUNT_INIT (&pattern->ref_count, 0);
     _cairo_user_data_array_init (&pattern->user_data);
+    cairo_list_init (&pattern->observers);
 }
 
 cairo_status_t
@@ -464,19 +466,19 @@ _cairo_pattern_fini (cairo_pattern_t *pattern)
 #if HAVE_VALGRIND
     switch (pattern->type) {
     case CAIRO_PATTERN_TYPE_SOLID:
-	VALGRIND_MAKE_MEM_NOACCESS (pattern, sizeof (cairo_solid_pattern_t));
+	VALGRIND_MAKE_MEM_UNDEFINED (pattern, sizeof (cairo_solid_pattern_t));
 	break;
     case CAIRO_PATTERN_TYPE_SURFACE:
-	VALGRIND_MAKE_MEM_NOACCESS (pattern, sizeof (cairo_surface_pattern_t));
+	VALGRIND_MAKE_MEM_UNDEFINED (pattern, sizeof (cairo_surface_pattern_t));
 	break;
     case CAIRO_PATTERN_TYPE_LINEAR:
-	VALGRIND_MAKE_MEM_NOACCESS (pattern, sizeof (cairo_linear_pattern_t));
+	VALGRIND_MAKE_MEM_UNDEFINED (pattern, sizeof (cairo_linear_pattern_t));
 	break;
     case CAIRO_PATTERN_TYPE_RADIAL:
-	VALGRIND_MAKE_MEM_NOACCESS (pattern, sizeof (cairo_radial_pattern_t));
+	VALGRIND_MAKE_MEM_UNDEFINED (pattern, sizeof (cairo_radial_pattern_t));
 	break;
     case CAIRO_PATTERN_TYPE_MESH:
-	VALGRIND_MAKE_MEM_NOACCESS (pattern, sizeof (cairo_mesh_pattern_t));
+	VALGRIND_MAKE_MEM_UNDEFINED (pattern, sizeof (cairo_mesh_pattern_t));
 	break;
     case CAIRO_PATTERN_TYPE_RASTER_SOURCE:
 	break;
@@ -496,22 +498,22 @@ _cairo_pattern_create_copy (cairo_pattern_t	  **pattern_out,
 
     switch (other->type) {
     case CAIRO_PATTERN_TYPE_SOLID:
-	pattern = malloc (sizeof (cairo_solid_pattern_t));
+	pattern = _cairo_malloc (sizeof (cairo_solid_pattern_t));
 	break;
     case CAIRO_PATTERN_TYPE_SURFACE:
-	pattern = malloc (sizeof (cairo_surface_pattern_t));
+	pattern = _cairo_malloc (sizeof (cairo_surface_pattern_t));
 	break;
     case CAIRO_PATTERN_TYPE_LINEAR:
-	pattern = malloc (sizeof (cairo_linear_pattern_t));
+	pattern = _cairo_malloc (sizeof (cairo_linear_pattern_t));
 	break;
     case CAIRO_PATTERN_TYPE_RADIAL:
-	pattern = malloc (sizeof (cairo_radial_pattern_t));
+	pattern = _cairo_malloc (sizeof (cairo_radial_pattern_t));
 	break;
     case CAIRO_PATTERN_TYPE_MESH:
-	pattern = malloc (sizeof (cairo_mesh_pattern_t));
+	pattern = _cairo_malloc (sizeof (cairo_mesh_pattern_t));
 	break;
     case CAIRO_PATTERN_TYPE_RASTER_SOURCE:
-	pattern = malloc (sizeof (cairo_raster_source_pattern_t));
+	pattern = _cairo_malloc (sizeof (cairo_raster_source_pattern_t));
 	break;
     default:
 	ASSERT_NOT_REACHED;
@@ -602,7 +604,7 @@ _cairo_pattern_create_solid (const cairo_color_t *color)
 	_freed_pool_get (&freed_pattern_pool[CAIRO_PATTERN_TYPE_SOLID]);
     if (unlikely (pattern == NULL)) {
 	/* None cached, need to create a new pattern. */
-	pattern = malloc (sizeof (cairo_solid_pattern_t));
+	pattern = _cairo_malloc (sizeof (cairo_solid_pattern_t));
 	if (unlikely (pattern == NULL)) {
 	    _cairo_error_throw (CAIRO_STATUS_NO_MEMORY);
 	    return (cairo_pattern_t *) &_cairo_pattern_nil;
@@ -736,7 +738,7 @@ cairo_pattern_create_for_surface (cairo_surface_t *surface)
     pattern =
 	_freed_pool_get (&freed_pattern_pool[CAIRO_PATTERN_TYPE_SURFACE]);
     if (unlikely (pattern == NULL)) {
-	pattern = malloc (sizeof (cairo_surface_pattern_t));
+	pattern = _cairo_malloc (sizeof (cairo_surface_pattern_t));
 	if (unlikely (pattern == NULL)) {
 	    _cairo_error_throw (CAIRO_STATUS_NO_MEMORY);
 	    return (cairo_pattern_t *)&_cairo_pattern_nil.base;
@@ -788,7 +790,7 @@ cairo_pattern_create_linear (double x0, double y0, double x1, double y1)
     pattern =
 	_freed_pool_get (&freed_pattern_pool[CAIRO_PATTERN_TYPE_LINEAR]);
     if (unlikely (pattern == NULL)) {
-	pattern = malloc (sizeof (cairo_linear_pattern_t));
+	pattern = _cairo_malloc (sizeof (cairo_linear_pattern_t));
 	if (unlikely (pattern == NULL)) {
 	    _cairo_error_throw (CAIRO_STATUS_NO_MEMORY);
 	    return (cairo_pattern_t *) &_cairo_pattern_nil.base;
@@ -842,7 +844,7 @@ cairo_pattern_create_radial (double cx0, double cy0, double radius0,
     pattern =
 	_freed_pool_get (&freed_pattern_pool[CAIRO_PATTERN_TYPE_RADIAL]);
     if (unlikely (pattern == NULL)) {
-	pattern = malloc (sizeof (cairo_radial_pattern_t));
+	pattern = _cairo_malloc (sizeof (cairo_radial_pattern_t));
 	if (unlikely (pattern == NULL)) {
 	    _cairo_error_throw (CAIRO_STATUS_NO_MEMORY);
 	    return (cairo_pattern_t *) &_cairo_pattern_nil.base;
@@ -1020,7 +1022,7 @@ cairo_pattern_create_mesh (void)
     pattern =
 	_freed_pool_get (&freed_pattern_pool[CAIRO_PATTERN_TYPE_MESH]);
     if (unlikely (pattern == NULL)) {
-	pattern = malloc (sizeof (cairo_mesh_pattern_t));
+	pattern = _cairo_malloc (sizeof (cairo_mesh_pattern_t));
 	if (unlikely (pattern == NULL)) {
 	    _cairo_error_throw (CAIRO_STATUS_NO_MEMORY);
 	    return (cairo_pattern_t *) &_cairo_pattern_nil.base;
@@ -1045,8 +1047,8 @@ cairo_pattern_create_mesh (void)
  * @pattern from being destroyed until a matching call to
  * cairo_pattern_destroy() is made.
  *
- * The number of references to a #cairo_pattern_t can be get using
- * cairo_pattern_get_reference_count().
+ * Use cairo_pattern_get_reference_count() to get the number of
+ * references to a #cairo_pattern_t.
  *
  * Return value: the referenced #cairo_pattern_t.
  *
@@ -1071,8 +1073,8 @@ slim_hidden_def (cairo_pattern_reference);
  * cairo_pattern_get_type:
  * @pattern: a #cairo_pattern_t
  *
- * This function returns the type a pattern.
- * See #cairo_pattern_type_t for available types.
+ * Get the pattern's type.  See #cairo_pattern_type_t for available
+ * types.
  *
  * Return value: The type of @pattern.
  *
@@ -2329,7 +2331,7 @@ _cairo_radial_pattern_box_to_parameter (const cairo_radial_pattern_t *radial,
     maxx = x1 + DBL_EPSILON;
     maxy = y1 + DBL_EPSILON;
 
-    /* we dont' allow negative radiuses, so we will be checking that
+    /* we don't allow negative radiuses, so we will be checking that
      * t*dr >= mindr to consider t valid */
     mindr = -(cr + DBL_EPSILON);
 
@@ -3020,8 +3022,8 @@ _cairo_pattern_alpha_range (const cairo_pattern_t *pattern,
  *
  * This function cannot be used while the mesh is being constructed.
  *
- * The function returns TRUE and sets the output parametes to define
- * the coodrinate range if the mesh pattern contains at least one
+ * The function returns TRUE and sets the output parameters to define
+ * the coordinate range if the mesh pattern contains at least one
  * patch, otherwise it returns FALSE.
  **/
 cairo_bool_t
@@ -3130,6 +3132,59 @@ _cairo_gradient_pattern_is_solid (const cairo_gradient_pattern_t *gradient,
 			    gradient->stops[0].color.alpha);
 
     return TRUE;
+}
+
+/**
+ * _cairo_pattern_is_constant_alpha:
+ *
+ * Convenience function to determine whether a pattern has constant
+ * alpha within the given extents. In this case the alpha argument is
+ * initialized to the alpha within the extents.
+ *
+ * Return value: %TRUE if the pattern has constant alpha.
+ **/
+cairo_bool_t
+_cairo_pattern_is_constant_alpha (const cairo_pattern_t         *abstract_pattern,
+				  const cairo_rectangle_int_t   *extents,
+				  double                        *alpha)
+{
+    const cairo_pattern_union_t *pattern;
+    cairo_color_t color;
+
+    if (_cairo_pattern_is_clear (abstract_pattern)) {
+	*alpha = 0.0;
+	return TRUE;
+    }
+
+    if (_cairo_pattern_is_opaque (abstract_pattern, extents)) {
+	*alpha = 1.0;
+	return TRUE;
+    }
+
+    pattern = (cairo_pattern_union_t *) abstract_pattern;
+    switch (pattern->base.type) {
+    case CAIRO_PATTERN_TYPE_SOLID:
+	*alpha = pattern->solid.color.alpha;
+	return TRUE;
+
+    case CAIRO_PATTERN_TYPE_LINEAR:
+    case CAIRO_PATTERN_TYPE_RADIAL:
+	if (_cairo_gradient_pattern_is_solid (&pattern->gradient.base, extents, &color)) {
+	    *alpha = color.alpha;
+	    return TRUE;
+	} else {
+	    return FALSE;
+	}
+
+	/* TODO: need to test these as well */
+    case CAIRO_PATTERN_TYPE_SURFACE:
+    case CAIRO_PATTERN_TYPE_RASTER_SOURCE:
+    case CAIRO_PATTERN_TYPE_MESH:
+	return FALSE;
+    }
+
+    ASSERT_NOT_REACHED;
+    return FALSE;
 }
 
 static cairo_bool_t
@@ -3338,111 +3393,180 @@ _cairo_pattern_is_clear (const cairo_pattern_t *abstract_pattern)
     return FALSE;
 }
 
+/*
+ * Will given row of back-translation matrix work with bilinear scale?
+ * This is true for scales larger than 1. Also it was judged acceptable
+ * for scales larger than .75. And if there is integer translation
+ * then a scale of exactly .5 works.
+ */
+static int
+use_bilinear(double x, double y, double t)
+{
+    /* This is the inverse matrix! */
+    double h = x*x + y*y;
+    if (h < 1.0 / (0.75 * 0.75))
+	return TRUE; /* scale > .75 */
+    if ((h > 3.99 && h < 4.01) /* scale is 1/2 */
+	&& !_cairo_fixed_from_double(x*y) /* parallel to an axis */
+	&& _cairo_fixed_is_integer (_cairo_fixed_from_double (t)))
+	return TRUE;
+    return FALSE;
+}
+
 /**
  * _cairo_pattern_analyze_filter:
  * @pattern: surface pattern
- * @pad_out: location to store necessary padding in the source image, or %NULL
  * Returns: the optimized #cairo_filter_t to use with @pattern.
  *
- * Analyze the filter to determine how much extra needs to be sampled
- * from the source image to account for the filter radius and whether
- * we can optimize the filter to a simpler value.
- *
- * XXX: We don't actually have any way of querying the backend for
- *      the filter radius, so we just guess base on what we know that
- *      backends do currently (see bug #10508)
+ * Possibly optimize the filter to a simpler value depending on transformation
  **/
 cairo_filter_t
-_cairo_pattern_analyze_filter (const cairo_pattern_t	*pattern,
-			       double			*pad_out)
+_cairo_pattern_analyze_filter (const cairo_pattern_t *pattern)
 {
-    double pad;
-    cairo_filter_t optimized_filter;
-
     switch (pattern->filter) {
     case CAIRO_FILTER_GOOD:
     case CAIRO_FILTER_BEST:
     case CAIRO_FILTER_BILINEAR:
+    case CAIRO_FILTER_FAST:
 	/* If source pixels map 1:1 onto destination pixels, we do
 	 * not need to filter (and do not want to filter, since it
 	 * will cause blurriness)
 	 */
 	if (_cairo_matrix_is_pixel_exact (&pattern->matrix)) {
-	    pad = 0.;
-	    optimized_filter = CAIRO_FILTER_NEAREST;
+	    return CAIRO_FILTER_NEAREST;
 	} else {
-	    /* 0.5 is enough for a bilinear filter. It's possible we
-	     * should defensively use more for CAIRO_FILTER_BEST, but
-	     * without a single example, it's hard to know how much
-	     * more would be defensive...
+	    /* Use BILINEAR for any scale greater than .75 instead
+	     * of GOOD. For scales of 1 and larger this is identical,
+	     * for the smaller sizes it was judged that the artifacts
+	     * were not worse than the artifacts from a box filer.
+	     * BILINEAR can also be used if the scale is exactly .5
+	     * and the translation in that direction is an integer.
 	     */
-	    pad = 0.5;
-	    optimized_filter = pattern->filter;
+	    if (pattern->filter == CAIRO_FILTER_GOOD &&
+		use_bilinear (pattern->matrix.xx, pattern->matrix.xy,
+			      pattern->matrix.x0) &&
+		use_bilinear (pattern->matrix.yx, pattern->matrix.yy,
+			      pattern->matrix.y0))
+		return CAIRO_FILTER_BILINEAR;
 	}
 	break;
 
-    case CAIRO_FILTER_FAST:
     case CAIRO_FILTER_NEAREST:
     case CAIRO_FILTER_GAUSSIAN:
     default:
-	pad = 0.;
-	optimized_filter = pattern->filter;
 	break;
     }
 
-    if (pad_out)
-	*pad_out = pad;
-
-    return optimized_filter;
+    return pattern->filter;
 }
 
-cairo_filter_t
+/**
+ * _cairo_hypot:
+ * Returns: value similar to hypot(@x,@y)
+ *
+ * May want to replace this with Manhattan distance (abs(x)+abs(y)) if
+ * hypot is too slow, as there is no need for accuracy here.
+ **/
+static inline double
+_cairo_hypot(double x, double y)
+{
+    return hypot(x, y);
+}
+
+/**
+ * _cairo_pattern_sampled_area:
+ *
+ * Return region of @pattern that will be sampled to fill @extents,
+ * based on the transformation and filter.
+ *
+ * This does not include pixels that are mulitiplied by values very
+ * close to zero by the ends of filters. This is so that transforms
+ * that should be the identity or 90 degree rotations do not expand
+ * the source unexpectedly.
+ *
+ * XXX: We don't actually have any way of querying the backend for
+ *      the filter radius, so we just guess base on what we know that
+ *      backends do currently (see bug #10508)
+ **/
+void
 _cairo_pattern_sampled_area (const cairo_pattern_t *pattern,
 			     const cairo_rectangle_int_t *extents,
 			     cairo_rectangle_int_t *sample)
 {
-    cairo_filter_t filter;
     double x1, x2, y1, y2;
-    double pad;
+    double padx, pady;
 
-    filter = _cairo_pattern_analyze_filter (pattern, &pad);
-    if (pad == 0.0 && _cairo_matrix_is_identity (&pattern->matrix)) {
+    /* Assume filters are interpolating, which means identity
+       cannot change the image */
+    if (_cairo_matrix_is_identity (&pattern->matrix)) {
 	*sample = *extents;
-	return filter;
+	return;
     }
 
-    x1 = extents->x;
-    y1 = extents->y;
-    x2 = extents->x + (int) extents->width;
-    y2 = extents->y + (int) extents->height;
-
+    /* Transform the centers of the corner pixels */
+    x1 = extents->x + 0.5;
+    y1 = extents->y + 0.5;
+    x2 = x1 + (extents->width - 1);
+    y2 = y1 + (extents->height - 1);
     _cairo_matrix_transform_bounding_box (&pattern->matrix,
 					  &x1, &y1, &x2, &y2,
 					  NULL);
-    if (x1 > CAIRO_RECT_INT_MIN)
-	sample->x = floor (x1 - pad);
-    else
-	sample->x = CAIRO_RECT_INT_MIN;
 
-    if (y1 > CAIRO_RECT_INT_MIN)
-	sample->y = floor (y1 - pad);
-    else
-	sample->y = CAIRO_RECT_INT_MIN;
+    /* How far away from center will it actually sample?
+     * This is the distance from a transformed pixel center to the
+     * furthest sample of reasonable size.
+     */
+    switch (pattern->filter) {
+    case CAIRO_FILTER_NEAREST:
+    case CAIRO_FILTER_FAST:
+	/* Correct value is zero, but when the sample is on an integer
+	 * it is unknown if the backend will sample the pixel to the
+	 * left or right. This value makes it include both possible pixels.
+	 */
+	padx = pady = 0.004;
+	break;
+    case CAIRO_FILTER_BILINEAR:
+    case CAIRO_FILTER_GAUSSIAN:
+    default:
+	/* Correct value is .5 */
+	padx = pady = 0.495;
+	break;
+    case CAIRO_FILTER_GOOD:
+	/* Correct value is max(width,1)*.5 */
+	padx = _cairo_hypot (pattern->matrix.xx, pattern->matrix.xy);
+	if (padx <= 1.0) padx = 0.495;
+	else if (padx >= 16.0) padx = 7.92;
+	else padx *= 0.495;
+	pady = _cairo_hypot (pattern->matrix.yx, pattern->matrix.yy);
+	if (pady <= 1.0) pady = 0.495;
+	else if (pady >= 16.0) pady = 7.92;
+	else pady *= 0.495;
+	break;
+    case CAIRO_FILTER_BEST:
+	/* Correct value is width*2 */
+	padx = _cairo_hypot (pattern->matrix.xx, pattern->matrix.xy) * 1.98;
+	if (padx > 7.92) padx = 7.92;
+	pady = _cairo_hypot (pattern->matrix.yx, pattern->matrix.yy) * 1.98;
+	if (pady > 7.92) pady = 7.92;
+	break;
+    }
 
-    if (x2 < CAIRO_RECT_INT_MAX)
-	sample->width = ceil (x2 + pad);
-    else
-	sample->width = CAIRO_RECT_INT_MAX;
+    /* round furthest samples to edge of pixels */
+    x1 = floor (x1 - padx);
+    if (x1 < CAIRO_RECT_INT_MIN) x1 = CAIRO_RECT_INT_MIN;
+    sample->x = x1;
 
-    if (y2 < CAIRO_RECT_INT_MAX)
-	sample->height = ceil (y2 + pad);
-    else
-	sample->height = CAIRO_RECT_INT_MAX;
+    y1 = floor (y1 - pady);
+    if (y1 < CAIRO_RECT_INT_MIN) y1 = CAIRO_RECT_INT_MIN;
+    sample->y = y1;
 
-    sample->width  -= sample->x;
-    sample->height -= sample->y;
+    x2 = floor (x2 + padx) + 1.0;
+    if (x2 > CAIRO_RECT_INT_MAX) x2 = CAIRO_RECT_INT_MAX;
+    sample->width = x2 - x1;
 
-    return filter;
+    y2 = floor (y2 + pady) + 1.0;
+    if (y2 > CAIRO_RECT_INT_MAX) y2 = CAIRO_RECT_INT_MAX;
+    sample->height = y2 - y1;
 }
 
 /**
@@ -3453,16 +3577,22 @@ _cairo_pattern_sampled_area (const cairo_pattern_t *pattern,
  * For unbounded patterns, the @extents will be initialized with
  * "infinite" extents, (minimum and maximum fixed-point values).
  *
+ * When is_vector is TRUE, avoid rounding to zero widths or heights that
+ * are less than 1 unit.
+ *
  * XXX: Currently, bounded gradient patterns will also return
  * "infinite" extents, though it would be possible to optimize these
  * with a little more work.
  **/
 void
 _cairo_pattern_get_extents (const cairo_pattern_t         *pattern,
-			    cairo_rectangle_int_t         *extents)
+			    cairo_rectangle_int_t         *extents,
+			    cairo_bool_t                   is_vector)
 {
     double x1, y1, x2, y2;
-    cairo_status_t status;
+    int ix1, ix2, iy1, iy2;
+    cairo_bool_t round_x = FALSE;
+    cairo_bool_t round_y = FALSE;
 
     switch (pattern->type) {
     case CAIRO_PATTERN_TYPE_SOLID:
@@ -3474,7 +3604,6 @@ _cairo_pattern_get_extents (const cairo_pattern_t         *pattern,
 	    const cairo_surface_pattern_t *surface_pattern =
 		(const cairo_surface_pattern_t *) pattern;
 	    cairo_surface_t *surface = surface_pattern->surface;
-	    double pad;
 
 	    if (! _cairo_surface_get_extents (surface, &surface_extents))
 		goto UNBOUNDED;
@@ -3485,14 +3614,12 @@ _cairo_pattern_get_extents (const cairo_pattern_t         *pattern,
 	    if (pattern->extend != CAIRO_EXTEND_NONE)
 		goto UNBOUNDED;
 
-	    /* The filter can effectively enlarge the extents of the
-	     * pattern, so extend as necessary.
-	     */
-	    _cairo_pattern_analyze_filter (&surface_pattern->base, &pad);
-	    x1 = surface_extents.x - pad;
-	    y1 = surface_extents.y - pad;
-	    x2 = surface_extents.x + (int) surface_extents.width  + pad;
-	    y2 = surface_extents.y + (int) surface_extents.height + pad;
+	    x1 = surface_extents.x;
+	    y1 = surface_extents.y;
+	    x2 = surface_extents.x + (int) surface_extents.width;
+	    y2 = surface_extents.y + (int) surface_extents.height;
+
+	    goto HANDLE_FILTER;
 	}
 	break;
 
@@ -3500,7 +3627,6 @@ _cairo_pattern_get_extents (const cairo_pattern_t         *pattern,
 	{
 	    const cairo_raster_source_pattern_t *raster =
 		(const cairo_raster_source_pattern_t *) pattern;
-	    double pad;
 
 	    if (raster->extents.width == 0 || raster->extents.height == 0)
 		goto EMPTY;
@@ -3508,14 +3634,41 @@ _cairo_pattern_get_extents (const cairo_pattern_t         *pattern,
 	    if (pattern->extend != CAIRO_EXTEND_NONE)
 		goto UNBOUNDED;
 
-	    /* The filter can effectively enlarge the extents of the
-	     * pattern, so extend as necessary.
-	     */
-	    _cairo_pattern_analyze_filter (pattern, &pad);
-	    x1 = raster->extents.x - pad;
-	    y1 = raster->extents.y - pad;
-	    x2 = raster->extents.x + (int) raster->extents.width  + pad;
-	    y2 = raster->extents.y + (int) raster->extents.height + pad;
+	    x1 = raster->extents.x;
+	    y1 = raster->extents.y;
+	    x2 = raster->extents.x + (int) raster->extents.width;
+	    y2 = raster->extents.y + (int) raster->extents.height;
+	}
+    HANDLE_FILTER:
+	switch (pattern->filter) {
+	case CAIRO_FILTER_NEAREST:
+	case CAIRO_FILTER_FAST:
+	    round_x = round_y = TRUE;
+	    /* We don't know which way .5 will go, so fudge it slightly. */
+	    x1 -= 0.004;
+	    y1 -= 0.004;
+	    x2 += 0.004;
+	    y2 += 0.004;
+	    break;
+	case CAIRO_FILTER_BEST:
+	    /* Assume best filter will produce nice antialiased edges */
+	    break;
+	case CAIRO_FILTER_BILINEAR:
+	case CAIRO_FILTER_GAUSSIAN:
+	case CAIRO_FILTER_GOOD:
+	default:
+	    /* These filters can blur the edge out 1/2 pixel when scaling up */
+	    if (_cairo_hypot (pattern->matrix.xx, pattern->matrix.yx) < 1.0) {
+		x1 -= 0.5;
+		x2 += 0.5;
+		round_x = TRUE;
+	    }
+	    if (_cairo_hypot (pattern->matrix.xy, pattern->matrix.yy) < 1.0) {
+		y1 -= 0.5;
+		y2 += 0.5;
+		round_y = TRUE;
+	    }
+	    break;
 	}
 	break;
 
@@ -3587,6 +3740,10 @@ _cairo_pattern_get_extents (const cairo_pattern_t         *pattern,
 	    } else {
 		goto  UNBOUNDED;
 	    }
+
+	    /* The current linear renderer just point-samples in the middle
+	       of the pixels, similar to the NEAREST filter: */
+	    round_x = round_y = TRUE;
 	}
 	break;
 
@@ -3594,22 +3751,8 @@ _cairo_pattern_get_extents (const cairo_pattern_t         *pattern,
 	{
 	    const cairo_mesh_pattern_t *mesh =
 		(const cairo_mesh_pattern_t *) pattern;
-	    double padx, pady;
-	    cairo_bool_t is_valid;
-
-	    is_valid = _cairo_mesh_pattern_coord_box (mesh, &x1, &y1, &x2, &y2);
-	    if (!is_valid)
+	    if (! _cairo_mesh_pattern_coord_box (mesh, &x1, &y1, &x2, &y2))
 		goto EMPTY;
-
-	    padx = pady = 1.;
-	    cairo_matrix_transform_distance (&pattern->matrix, &padx, &pady);
-	    padx = fabs (padx);
-	    pady = fabs (pady);
-
-	    x1 -= padx;
-	    y1 -= pady;
-	    x2 += padx;
-	    y2 += pady;
 	}
 	break;
 
@@ -3622,6 +3765,7 @@ _cairo_pattern_get_extents (const cairo_pattern_t         *pattern,
 	y1 -= pattern->matrix.y0; y2 -= pattern->matrix.y0;
     } else {
 	cairo_matrix_t imatrix;
+	cairo_status_t status;
 
 	imatrix = pattern->matrix;
 	status = cairo_matrix_invert (&imatrix);
@@ -3633,22 +3777,38 @@ _cairo_pattern_get_extents (const cairo_pattern_t         *pattern,
 					      NULL);
     }
 
-    x1 = floor (x1);
+    if (!round_x) {
+	x1 -= 0.5;
+	x2 += 0.5;
+    }
     if (x1 < CAIRO_RECT_INT_MIN)
-	x1 = CAIRO_RECT_INT_MIN;
-    y1 = floor (y1);
-    if (y1 < CAIRO_RECT_INT_MIN)
-	y1 = CAIRO_RECT_INT_MIN;
-
-    x2 = ceil (x2);
+	ix1 = CAIRO_RECT_INT_MIN;
+    else 
+	ix1 = _cairo_lround (x1);
     if (x2 > CAIRO_RECT_INT_MAX)
-	x2 = CAIRO_RECT_INT_MAX;
-    y2 = ceil (y2);
-    if (y2 > CAIRO_RECT_INT_MAX)
-	y2 = CAIRO_RECT_INT_MAX;
+	ix2 = CAIRO_RECT_INT_MAX;
+    else
+	ix2 = _cairo_lround (x2);
+    extents->x = ix1; extents->width  = ix2 - ix1;
+    if (is_vector && extents->width == 0 && x1 != x2)
+	extents->width += 1;
 
-    extents->x = x1; extents->width  = x2 - x1;
-    extents->y = y1; extents->height = y2 - y1;
+    if (!round_y) {
+	y1 -= 0.5;
+	y2 += 0.5;
+    }
+    if (y1 < CAIRO_RECT_INT_MIN)
+	iy1 = CAIRO_RECT_INT_MIN;
+    else
+	iy1 = _cairo_lround (y1);
+    if (y2 > CAIRO_RECT_INT_MAX)
+	iy2 = CAIRO_RECT_INT_MAX;
+    else
+	iy2 = _cairo_lround (y2);
+    extents->y = iy1; extents->height = iy2 - iy1;
+    if (is_vector && extents->height == 0 && y1 != y2)
+	extents->height += 1;
+
     return;
 
   UNBOUNDED:
@@ -3699,7 +3859,7 @@ _cairo_pattern_get_ink_extents (const cairo_pattern_t         *pattern,
 	}
     }
 
-    _cairo_pattern_get_extents (pattern, extents);
+    _cairo_pattern_get_extents (pattern, extents, TRUE);
     return CAIRO_STATUS_SUCCESS;
 }
 
@@ -3911,7 +4071,7 @@ _cairo_mesh_pattern_equal (const cairo_mesh_pattern_t *a,
 
     for (i = 0; i < num_patches_a; i++) {
 	patch_a = _cairo_array_index_const (&a->patches, i);
-	patch_b = _cairo_array_index_const (&a->patches, i);
+	patch_b = _cairo_array_index_const (&b->patches, i);
 	if (memcmp (patch_a, patch_b, sizeof(cairo_mesh_patch_t)) != 0)
 	    return FALSE;
     }
@@ -4320,7 +4480,7 @@ cairo_mesh_pattern_get_path (cairo_pattern_t *pattern,
 
     patch = _cairo_array_index_const (&mesh->patches, patch_num);
 
-    path = malloc (sizeof (cairo_path_t));
+    path = _cairo_malloc (sizeof (cairo_path_t));
     if (path == NULL)
 	return _cairo_path_create_in_error (_cairo_error (CAIRO_STATUS_NO_MEMORY));
 
@@ -4510,14 +4670,43 @@ static void
 _cairo_debug_print_surface_pattern (FILE *file,
 				    const cairo_surface_pattern_t *pattern)
 {
-    printf ("  surface type: %d\n", pattern->surface->type);
+    const char *s;
+    switch (pattern->surface->type) {
+    case CAIRO_SURFACE_TYPE_IMAGE: s = "image"; break;
+    case CAIRO_SURFACE_TYPE_PDF: s = "pdf"; break;
+    case CAIRO_SURFACE_TYPE_PS: s = "ps"; break;
+    case CAIRO_SURFACE_TYPE_XLIB: s = "xlib"; break;
+    case CAIRO_SURFACE_TYPE_XCB: s = "xcb"; break;
+    case CAIRO_SURFACE_TYPE_GLITZ: s = "glitz"; break;
+    case CAIRO_SURFACE_TYPE_QUARTZ: s = "quartz"; break;
+    case CAIRO_SURFACE_TYPE_WIN32: s = "win32"; break;
+    case CAIRO_SURFACE_TYPE_BEOS: s = "beos"; break;
+    case CAIRO_SURFACE_TYPE_DIRECTFB: s = "directfb"; break;
+    case CAIRO_SURFACE_TYPE_SVG: s = "svg"; break;
+    case CAIRO_SURFACE_TYPE_OS2: s = "os2"; break;
+    case CAIRO_SURFACE_TYPE_WIN32_PRINTING: s = "win32_printing"; break;
+    case CAIRO_SURFACE_TYPE_QUARTZ_IMAGE: s = "quartz_image"; break;
+    case CAIRO_SURFACE_TYPE_SCRIPT: s = "script"; break;
+    case CAIRO_SURFACE_TYPE_QT: s = "qt"; break;
+    case CAIRO_SURFACE_TYPE_RECORDING: s = "recording"; break;
+    case CAIRO_SURFACE_TYPE_VG: s = "vg"; break;
+    case CAIRO_SURFACE_TYPE_GL: s = "gl"; break;
+    case CAIRO_SURFACE_TYPE_DRM: s = "drm"; break;
+    case CAIRO_SURFACE_TYPE_TEE: s = "tee"; break;
+    case CAIRO_SURFACE_TYPE_XML: s = "xml"; break;
+    case CAIRO_SURFACE_TYPE_SKIA: s = "skia"; break; /* Deprecated */
+    case CAIRO_SURFACE_TYPE_SUBSURFACE: s = "subsurface"; break;
+    case CAIRO_SURFACE_TYPE_COGL: s = "cogl"; break;
+    default: s = "invalid"; ASSERT_NOT_REACHED; break;
+    }
+    fprintf (file, "  surface type: %s\n", s);
 }
 
 static void
 _cairo_debug_print_raster_source_pattern (FILE *file,
 					  const cairo_raster_source_pattern_t *raster)
 {
-    printf ("  content: %x, size %dx%d\n", raster->content, raster->extents.width, raster->extents.height);
+    fprintf (file, "  content: %x, size %dx%d\n", raster->content, raster->extents.width, raster->extents.height);
 }
 
 static void
@@ -4571,7 +4760,7 @@ _cairo_debug_print_pattern (FILE *file, const cairo_pattern_t *pattern)
     case CAIRO_FILTER_BEST: s = "best"; break;
     case CAIRO_FILTER_NEAREST: s = "nearest"; break;
     case CAIRO_FILTER_BILINEAR: s = "bilinear"; break;
-    case CAIRO_FILTER_GAUSSIAN: s = "guassian"; break;
+    case CAIRO_FILTER_GAUSSIAN: s = "gaussian"; break;
     default: s = "invalid"; ASSERT_NOT_REACHED; break;
     }
     fprintf (file, "  filter: %s\n", s);

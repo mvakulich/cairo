@@ -181,7 +181,9 @@ test_cairo_set_operator (cairo_t *cr)
 static cairo_test_status_t
 test_cairo_set_source (cairo_t *cr)
 {
-    cairo_set_source (cr, cairo_pattern_create_rgb (0, 0, 0));
+    cairo_pattern_t *source = cairo_pattern_create_rgb (0, 0, 0);
+    cairo_set_source (cr, source);
+    cairo_pattern_destroy (source);
 
     return CAIRO_TEST_SUCCESS;
 }
@@ -1093,7 +1095,7 @@ static cairo_test_status_t
 test_cairo_surface_set_mime_data (cairo_surface_t *surface)
 {
     const char *mimetype = "text/x-uri";
-    const char *data = "http://www.cairographics.org";
+    const char *data = "https://www.cairographics.org";
     cairo_status_t status;
 
     status = cairo_surface_set_mime_data (surface,

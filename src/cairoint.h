@@ -107,6 +107,12 @@ _cairo_win32_tmpfile (void);
 #undef MAX
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+#if _XOPEN_SOURCE >= 600 || defined (_ISOC99_SOURCE)
+#define ISFINITE(x) isfinite (x)
+#else
+#define ISFINITE(x) ((x) * (x) >= 0.) /* check for NaNs */
+#endif
+
 #ifndef FALSE
 #define FALSE 0
 #endif
@@ -229,7 +235,7 @@ be16_to_cpu(uint16_t v)
 static inline uint32_t cairo_const
 cpu_to_be32(uint32_t v)
 {
-    return (cpu_to_be16 (v) << 16) | cpu_to_be16 (v >> 16);
+    return (v >> 24) | ((v >> 8) & 0xff00) | ((v << 8) & 0xff0000) | (v << 24);
 }
 
 static inline uint32_t cairo_const
@@ -240,6 +246,32 @@ be32_to_cpu(uint32_t v)
 
 #endif
 
+/* Unaligned big endian access
+ */
+
+static inline uint16_t get_unaligned_be16 (const unsigned char *p)
+{
+    return p[0] << 8 | p[1];
+}
+
+static inline uint32_t get_unaligned_be32 (const unsigned char *p)
+{
+    return p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3];
+}
+
+static inline void put_unaligned_be16 (uint16_t v, unsigned char *p)
+{
+    p[0] = (v >> 8) & 0xff;
+    p[1] = v & 0xff;
+}
+
+static inline void put_unaligned_be32 (uint32_t v, unsigned char *p)
+{
+    p[0] = (v >> 24) & 0xff;
+    p[1] = (v >> 16) & 0xff;
+    p[2] = (v >> 8)  & 0xff;
+    p[3] = v & 0xff;
+}
 
 /* The glibc versions of ispace() and isdigit() are slow in UTF-8 locales.
  */
@@ -254,6 +286,12 @@ static inline int cairo_const
 _cairo_isdigit (int c)
 {
     return (c >= '0' && c <= '9');
+}
+
+static inline int cairo_const
+_cairo_isalpha (int c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
 #include "cairo-types-private.h"
@@ -445,7 +483,8 @@ typedef enum _cairo_scaled_glyph_info {
     CAIRO_SCALED_GLYPH_INFO_METRICS	 = (1 << 0),
     CAIRO_SCALED_GLYPH_INFO_SURFACE	 = (1 << 1),
     CAIRO_SCALED_GLYPH_INFO_PATH	 = (1 << 2),
-    CAIRO_SCALED_GLYPH_INFO_RECORDING_SURFACE = (1 << 3)
+    CAIRO_SCALED_GLYPH_INFO_RECORDING_SURFACE = (1 << 3),
+    CAIRO_SCALED_GLYPH_INFO_COLOR_SURFACE = (1 << 4)
 } cairo_scaled_glyph_info_t;
 
 typedef struct _cairo_scaled_font_subset {
@@ -530,8 +569,12 @@ struct _cairo_scaled_font_backend {
 		     unsigned long               index,
                      uint32_t                   *ucs4);
 
-    cairo_warn cairo_bool_t
-    (*is_synthetic)(void                       *scaled_font);
+    /* Determine if this scaled font differs from the outlines in the font tables.
+     * eg synthesized bold/italic or a non default variant of a variable font.
+     */
+    cairo_warn cairo_int_status_t
+    (*is_synthetic)(void                       *scaled_font,
+		    cairo_bool_t               *is_synthetic);
 
     /* For type 1 fonts, return the glyph name for a given glyph index.
      * A glyph index and list of glyph names in the Type 1 fonts is provided.
@@ -571,6 +614,9 @@ struct _cairo_scaled_font_backend {
                            long                  offset,
                            unsigned char        *buffer,
                            unsigned long        *length);
+
+    cairo_bool_t
+    (*has_color_glyphs)   (void                 *scaled_font);
 };
 
 struct _cairo_font_face_backend {
@@ -788,6 +834,7 @@ _cairo_color_get_content (const cairo_color_t *color) cairo_pure;
 /* cairo-font-face.c */
 
 extern const cairo_private cairo_font_face_t _cairo_font_face_nil;
+extern const cairo_private cairo_font_face_t _cairo_font_face_nil_file_not_found;
 
 cairo_private void
 _cairo_font_face_init (cairo_font_face_t               *font_face,
@@ -834,6 +881,9 @@ _cairo_font_options_init_copy (cairo_font_options_t		*options,
 			       const cairo_font_options_t	*other);
 
 cairo_private void
+_cairo_font_options_fini (cairo_font_options_t *options);
+
+cairo_private void
 _cairo_font_options_set_lcd_filter (cairo_font_options_t   *options,
 				   cairo_lcd_filter_t  lcd_filter);
 
@@ -865,11 +915,20 @@ _cairo_validate_text_clusters (const char		   *utf8,
 			       int			    num_clusters,
 			       cairo_text_cluster_flags_t   cluster_flags);
 
+cairo_private unsigned long
+_cairo_string_hash (const char *str, int len);
+
 cairo_private cairo_status_t
 _cairo_intern_string (const char **str_inout, int len);
 
 cairo_private void
 _cairo_intern_string_reset_static_data (void);
+
+cairo_private const char *
+_cairo_get_locale_decimal_point (void);
+
+cairo_private double
+_cairo_strtod (const char *nptr, char **endptr);
 
 /* cairo-path-fixed.c */
 cairo_private cairo_path_fixed_t *
@@ -991,6 +1050,7 @@ cairo_private void
 _cairo_path_fixed_approximate_stroke_extents (const cairo_path_fixed_t *path,
 					      const cairo_stroke_style_t *style,
 					      const cairo_matrix_t *ctm,
+					      cairo_bool_t vector,
 					      cairo_rectangle_int_t *extents);
 
 cairo_private cairo_status_t
@@ -1214,6 +1274,11 @@ _cairo_scaled_glyph_set_recording_surface (cairo_scaled_glyph_t *scaled_glyph,
                                            cairo_scaled_font_t *scaled_font,
                                            cairo_surface_t *recording_surface);
 
+cairo_private void
+_cairo_scaled_glyph_set_color_surface (cairo_scaled_glyph_t *scaled_glyph,
+		                       cairo_scaled_font_t *scaled_font,
+		                       cairo_image_surface_t *surface);
+
 cairo_private cairo_int_status_t
 _cairo_scaled_glyph_lookup (cairo_scaled_font_t *scaled_font,
 			    unsigned long index,
@@ -1277,6 +1342,9 @@ _cairo_stroke_style_dash_approximate (const cairo_stroke_style_t *style,
 
 /* cairo-surface.c */
 
+cairo_private cairo_bool_t
+_cairo_surface_has_mime_image (cairo_surface_t *surface);
+
 cairo_private cairo_status_t
 _cairo_surface_copy_mime_data (cairo_surface_t *dst,
 			       cairo_surface_t *src);
@@ -1305,7 +1373,8 @@ cairo_private void
 _cairo_surface_init (cairo_surface_t			*surface,
 		     const cairo_surface_backend_t	*backend,
 		     cairo_device_t			*device,
-		     cairo_content_t			 content);
+		     cairo_content_t			 content,
+		     cairo_bool_t                        is_vector);
 
 cairo_private void
 _cairo_surface_set_font_options (cairo_surface_t       *surface,
@@ -1386,6 +1455,17 @@ _cairo_surface_show_text_glyphs (cairo_surface_t	    *surface,
 				 const cairo_clip_t		    *clip);
 
 cairo_private cairo_status_t
+_cairo_surface_tag (cairo_surface_t	        *surface,
+		    cairo_bool_t                 begin,
+		    const char                  *tag_name,
+		    const char                  *attributes,
+		    const cairo_pattern_t	*source,
+		    const cairo_stroke_style_t	*stroke_style,
+		    const cairo_matrix_t	*ctm,
+		    const cairo_matrix_t	*ctm_inverse,
+		    const cairo_clip_t	        *clip);
+
+cairo_private cairo_status_t
 _cairo_surface_acquire_source_image (cairo_surface_t         *surface,
 				     cairo_image_surface_t  **image_out,
 				     void                   **image_extra);
@@ -1438,11 +1518,11 @@ _cairo_surface_release_device_reference (cairo_surface_t *surface);
  * for that, even without being considered "valid" for the sake of
  * things like cairo_image_surface_create().
  *
- * Since 1.2.0 we ran into the same situtation with X servers with BGR
+ * Since 1.2.0 we ran into the same situation with X servers with BGR
  * visuals. This time we invented #cairo_internal_format_t instead,
  * (see it for more discussion).
  *
- * The punchline is that %CAIRO_FORMAT_VALID must not conside any
+ * The punchline is that %CAIRO_FORMAT_VALID must not consider any
  * internal format to be valid. Also we need to decide if the
  * RGB16_565 should be moved to instead be an internal format. If so,
  * this macro need not change for it. (We probably will need to leave
@@ -1456,7 +1536,7 @@ _cairo_surface_release_device_reference (cairo_surface_t *surface);
  * in cairo-xlib-surface.c--again see -Wswitch-enum).
  */
 #define CAIRO_FORMAT_VALID(format) ((format) >= CAIRO_FORMAT_ARGB32 &&		\
-                                    (format) <= CAIRO_FORMAT_RGB30)
+                                    (format) <= CAIRO_FORMAT_RGBA128F)
 
 /* pixman-required stride alignment in bytes. */
 #define CAIRO_STRIDE_ALIGNMENT (sizeof (uint32_t))
@@ -1505,6 +1585,9 @@ _cairo_image_scaled_glyph_fini (cairo_scaled_font_t *scaled_font,
 
 cairo_private void
 _cairo_image_reset_static_data (void);
+
+cairo_private void
+_cairo_image_compositor_reset_static_data (void);
 
 cairo_private cairo_surface_t *
 _cairo_image_surface_create_with_pixman_format (unsigned char		*data,
@@ -1749,6 +1832,12 @@ _cairo_matrix_to_pixman_matrix_offset (const cairo_matrix_t	*matrix,
 				       int                      *out_x_offset,
 				       int                      *out_y_offset);
 
+cairo_private void
+_cairo_debug_print_matrix (FILE *file, const cairo_matrix_t *matrix);
+
+cairo_private void
+_cairo_debug_print_rect (FILE *file, const cairo_rectangle_int_t *rect);
+
 cairo_private cairo_status_t
 _cairo_bentley_ottmann_tessellate_rectilinear_polygon (cairo_traps_t	 *traps,
 						       const cairo_polygon_t *polygon,
@@ -1817,6 +1906,10 @@ cairo_private int
 _cairo_ucs4_to_utf8 (uint32_t    unicode,
 		     char       *utf8);
 
+cairo_private int
+_cairo_ucs4_to_utf16 (uint32_t    unicode,
+		      uint16_t   *utf16);
+
 #if CAIRO_HAS_WIN32_FONT || CAIRO_HAS_QUARTZ_FONT || CAIRO_HAS_PDF_OPERATORS
 # define CAIRO_HAS_UTF8_TO_UTF16 1
 #endif
@@ -1837,6 +1930,10 @@ _cairo_matrix_multiply (cairo_matrix_t *r,
 
 cairo_private void
 _cairo_observers_notify (cairo_list_t *observers, void *arg);
+
+/* Open a file with a UTF-8 filename */
+cairo_private cairo_status_t
+_cairo_fopen (const char *filename, const char *mode, FILE **file_out);
 
 /* Avoid unnecessary PLT entries.  */
 slim_hidden_proto (cairo_clip_preserve);
@@ -2006,10 +2103,6 @@ slim_hidden_proto (cairo_surface_write_to_png_stream);
 
 #endif
 
-cairo_private_no_warn cairo_filter_t
-_cairo_pattern_analyze_filter (const cairo_pattern_t	*pattern,
-			       double			*pad_out);
-
 CAIRO_END_DECLS
 
 #include "cairo-mutex-private.h"
@@ -2034,7 +2127,7 @@ _cairo_debug_check_image_surface_is_defined (const cairo_surface_t *surface);
 #endif
 
 cairo_private void
-_cairo_debug_print_path (FILE *stream, cairo_path_fixed_t *path);
+_cairo_debug_print_path (FILE *stream, const cairo_path_fixed_t *path);
 
 cairo_private void
 _cairo_debug_print_polygon (FILE *stream, cairo_polygon_t *polygon);

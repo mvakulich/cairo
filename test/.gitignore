@@ -17,6 +17,7 @@ cairo-test-suite
 pdf2png
 ps2png
 svg2png
+callgrind.out.*
 valgrind-log
 *.manifest
 *.gcda
@@ -30,6 +31,7 @@ valgrind-log
 *.lo
 *.log
 *.suo
+*.trs
 *.o
 *~
 .*.sw?

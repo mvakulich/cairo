@@ -348,7 +348,7 @@ _cairo_device_create_observer_internal (cairo_device_t *target,
     cairo_device_observer_t *device;
     cairo_status_t status;
 
-    device = malloc (sizeof (cairo_device_observer_t));
+    device = _cairo_malloc (sizeof (cairo_device_observer_t));
     if (unlikely (device == NULL))
 	return _cairo_device_create_in_error (_cairo_error (CAIRO_STATUS_NO_MEMORY));
 
@@ -379,13 +379,14 @@ _cairo_surface_create_observer_internal (cairo_device_t *device,
     cairo_surface_observer_t *surface;
     cairo_status_t status;
 
-    surface = malloc (sizeof (cairo_surface_observer_t));
+    surface = _cairo_malloc (sizeof (cairo_surface_observer_t));
     if (unlikely (surface == NULL))
 	return _cairo_surface_create_in_error (_cairo_error (CAIRO_STATUS_NO_MEMORY));
 
     _cairo_surface_init (&surface->base,
 			 &_cairo_surface_observer_backend, device,
-			 target->content);
+			 target->content,
+			 target->is_vector);
 
     status = log_init (&surface->log,
 		       ((cairo_device_observer_t *)device)->log.record != NULL);
@@ -653,7 +654,7 @@ add_record (cairo_observation_t *log,
 }
 
 static void
-sync (cairo_surface_t *target, int x, int y)
+_cairo_surface_sync (cairo_surface_t *target, int x, int y)
 {
     cairo_rectangle_int_t extents;
 
@@ -751,7 +752,7 @@ _cairo_surface_observer_paint (void *abstract_surface,
     if (unlikely (status))
 	return status;
 
-    sync (surface->target, x, y);
+    _cairo_surface_sync (surface->target, x, y);
     t = _cairo_time_get_delta (t);
 
     add_record_paint (&surface->log, surface->target, op, source, clip, t);
@@ -837,7 +838,7 @@ _cairo_surface_observer_mask (void *abstract_surface,
     if (unlikely (status))
 	return status;
 
-    sync (surface->target, x, y);
+    _cairo_surface_sync (surface->target, x, y);
     t = _cairo_time_get_delta (t);
 
     add_record_mask (&surface->log,
@@ -944,7 +945,7 @@ _cairo_surface_observer_fill (void			*abstract_surface,
     if (unlikely (status))
 	return status;
 
-    sync (surface->target, x, y);
+    _cairo_surface_sync (surface->target, x, y);
     t = _cairo_time_get_delta (t);
 
     add_record_fill (&surface->log,
@@ -1063,7 +1064,7 @@ _cairo_surface_observer_stroke (void				*abstract_surface,
     if (unlikely (status))
 	return status;
 
-    sync (surface->target, x, y);
+    _cairo_surface_sync (surface->target, x, y);
     t = _cairo_time_get_delta (t);
 
     add_record_stroke (&surface->log,
@@ -1183,7 +1184,7 @@ _cairo_surface_observer_glyphs (void			*abstract_surface,
     if (unlikely (status))
 	return status;
 
-    sync (surface->target, x, y);
+    _cairo_surface_sync (surface->target, x, y);
     t = _cairo_time_get_delta (t);
 
     add_record_glyphs (&surface->log,
@@ -1217,8 +1218,6 @@ _cairo_surface_observer_mark_dirty (void *abstract_surface,
 {
     cairo_surface_observer_t *surface = abstract_surface;
     cairo_status_t status;
-
-    printf ("mark-dirty (%d, %d) x (%d, %d)\n", x, y, width, height);
 
     status = CAIRO_STATUS_SUCCESS;
     if (surface->target->backend->mark_dirty_rectangle)
@@ -1419,7 +1418,7 @@ _cairo_surface_observer_add_callback (cairo_list_t *head,
 {
     struct callback_list *cb;
 
-    cb = malloc (sizeof (*cb));
+    cb = _cairo_malloc (sizeof (*cb));
     if (unlikely (cb == NULL))
 	return _cairo_error (CAIRO_STATUS_NO_MEMORY);
 

@@ -207,7 +207,7 @@ _cairo_xlib_device_create (Display *dpy)
 	}
     }
 
-    display = malloc (sizeof (cairo_xlib_display_t));
+    display = _cairo_malloc (sizeof (cairo_xlib_display_t));
     if (unlikely (display == NULL)) {
 	device = _cairo_device_create_in_error (CAIRO_STATUS_NO_MEMORY);
 	goto UNLOCK;
@@ -291,7 +291,7 @@ _cairo_xlib_device_create (Display *dpy)
      *
      *    1. The original bug that led to the buggy_repeat
      *    workaround. This was a bug that Owen Taylor investigated,
-     *    understood well, and characterized against carious X
+     *    understood well, and characterized against various X
      *    servers. Confirmed X servers with this bug include:
      *
      *		"XFree86" <= 40500000
@@ -382,6 +382,10 @@ _cairo_xlib_display_get_xrender_format_for_pixman(cairo_xlib_display_t *display,
     Display *dpy = display->display;
     XRenderPictFormat tmpl;
     int mask;
+
+    /* No equivalent in X11 yet. */
+    if (format == PIXMAN_rgba_float || format == PIXMAN_rgb_float)
+	return NULL;
 
 #define MASK(x) ((1<<(x))-1)
 
@@ -509,6 +513,14 @@ _cairo_xlib_display_get_xrender_format (cairo_xlib_display_t	*display,
 	case CAIRO_FORMAT_RGB30:
 	    xrender_format = _cairo_xlib_display_get_xrender_format_for_pixman(display,
 									       PIXMAN_x2r10g10b10);
+	    break;
+	case CAIRO_FORMAT_RGBA128F:
+	    xrender_format = _cairo_xlib_display_get_xrender_format_for_pixman(display,
+									       PIXMAN_rgba_float);
+	    break;
+	case CAIRO_FORMAT_RGB96F:
+	    xrender_format = _cairo_xlib_display_get_xrender_format_for_pixman(display,
+									       PIXMAN_rgb_float);
 	    break;
 	case CAIRO_FORMAT_INVALID:
 	default:

@@ -391,7 +391,7 @@ _cairo_xlib_xcb_device_create (Display *dpy, cairo_device_t *xcb_device)
 	}
     }
 
-    display = malloc (sizeof (cairo_xlib_xcb_display_t));
+    display = _cairo_malloc (sizeof (cairo_xlib_xcb_display_t));
     if (unlikely (display == NULL)) {
 	device = _cairo_device_create_in_error (CAIRO_STATUS_NO_MEMORY);
 	goto unlock;
@@ -438,7 +438,7 @@ _cairo_xlib_xcb_surface_create (void *dpy,
     if (unlikely (xcb->status))
 	return xcb;
 
-    surface = malloc (sizeof (*surface));
+    surface = _cairo_malloc (sizeof (*surface));
     if (unlikely (surface == NULL)) {
 	cairo_surface_destroy (xcb);
 	return _cairo_surface_create_in_error (CAIRO_STATUS_NO_MEMORY);
@@ -447,7 +447,8 @@ _cairo_xlib_xcb_surface_create (void *dpy,
     _cairo_surface_init (&surface->base,
 			 &_cairo_xlib_xcb_surface_backend,
 			 _cairo_xlib_xcb_device_create (dpy, xcb->device),
-			 xcb->content);
+			 xcb->content,
+			 FALSE); /* is_vector */
 
     /* _cairo_surface_init() got another reference to the device, drop ours */
     cairo_device_destroy (surface->base.device);
@@ -519,21 +520,6 @@ cairo_xlib_surface_create (Display     *dpy,
 								     width, height));
 }
 
-cairo_surface_t *
-cairo_xlib_surface_create_for_bitmap (Display  *dpy,
-				      Pixmap	bitmap,
-				      Screen   *scr,
-				      int	width,
-				      int	height)
-{
-    return _cairo_xlib_xcb_surface_create (dpy, scr, NULL, NULL,
-					   cairo_xcb_surface_create_for_bitmap (XGetXCBConnection (dpy),
-										(xcb_screen_t *) scr,
-										bitmap,
-										width, height));
-}
-
-#if CAIRO_HAS_XLIB_XRENDER_SURFACE
 static xcb_screen_t *
 _cairo_xcb_screen_from_root (xcb_connection_t *connection,
 			     xcb_window_t id)
@@ -548,6 +534,24 @@ _cairo_xcb_screen_from_root (xcb_connection_t *connection,
 
     return NULL;
 }
+
+cairo_surface_t *
+cairo_xlib_surface_create_for_bitmap (Display  *dpy,
+				      Pixmap	bitmap,
+				      Screen   *scr,
+				      int	width,
+				      int	height)
+{
+    xcb_connection_t *connection = XGetXCBConnection (dpy);
+    xcb_screen_t *screen = _cairo_xcb_screen_from_root (connection, (xcb_window_t) scr->root);
+    return _cairo_xlib_xcb_surface_create (dpy, scr, NULL, NULL,
+					   cairo_xcb_surface_create_for_bitmap (connection,
+										screen,
+										bitmap,
+										width, height));
+}
+
+#if CAIRO_HAS_XLIB_XRENDER_SURFACE
 cairo_surface_t *
 cairo_xlib_surface_create_with_xrender_format (Display		    *dpy,
 					       Drawable		    drawable,

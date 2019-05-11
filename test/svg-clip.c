@@ -23,10 +23,11 @@
  * Author: Kristian Høgsberg <krh@redhat.com>
  */
 
+#include "cairo-test.h"
+
 #include <stdio.h>
 
 #include <cairo-svg.h>
-#include "cairo-test.h"
 
 /* Test SVG clipping */
 
@@ -86,7 +87,7 @@ test_clip (cairo_t *cr, double width, double height)
     cairo_stroke (cr2);
 
     /* Using the first context, draw another black vertical line.
-     * This line should be clipped agaist the bezier clipping path set
+     * This line should be clipped against the bezier clipping path set
      * earlier. */
     cairo_set_source_rgb (cr, 0, 0, 0);
     cairo_move_to (cr, 400, 0);

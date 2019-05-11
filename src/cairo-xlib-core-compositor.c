@@ -292,9 +292,7 @@ render_boxes (cairo_xlib_surface_t	*dst,
 	      const cairo_pattern_t	*pattern,
 	      cairo_boxes_t		*boxes)
 {
-    double pad;
-
-    if (_cairo_pattern_analyze_filter (pattern, &pad) != CAIRO_FILTER_NEAREST)
+    if (pattern->filter != CAIRO_FILTER_NEAREST)
 	return fallback_boxes (dst, pattern, boxes);
 
     switch (pattern->extend) {
@@ -634,9 +632,10 @@ _cairo_xlib_core_compositor_fill (const cairo_compositor_t	*compositor,
 const cairo_compositor_t *
 _cairo_xlib_core_compositor_get (void)
 {
+    static cairo_atomic_once_t once = CAIRO_ATOMIC_ONCE_INIT;
     static cairo_compositor_t compositor;
 
-    if (compositor.delegate == NULL) {
+    if (_cairo_atomic_init_once_enter(&once)) {
 	compositor.delegate = _cairo_xlib_fallback_compositor_get ();
 
 	compositor.paint = _cairo_xlib_core_compositor_paint;
@@ -644,6 +643,8 @@ _cairo_xlib_core_compositor_get (void)
 	compositor.fill  = _cairo_xlib_core_compositor_fill;
 	compositor.stroke = _cairo_xlib_core_compositor_stroke;
 	compositor.glyphs = NULL; /* XXX PolyGlyph? */
+
+	_cairo_atomic_init_once_leave(&once);
     }
 
     return &compositor;

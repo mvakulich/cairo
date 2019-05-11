@@ -300,7 +300,7 @@ _cairo_array_append_multiple (cairo_array_t	*array,
  *
  * Allocate space at the end of the array for @num_elements additional
  * elements, providing the address of the new memory chunk in
- * @elements. This memory will be unitialized, but will be accounted
+ * @elements. This memory will be uninitialized, but will be accounted
  * for in the return value of _cairo_array_num_elements().
  *
  * Return value: %CAIRO_STATUS_SUCCESS if successful or
@@ -484,6 +484,9 @@ _cairo_user_data_array_set_data (cairo_user_data_array_t     *array,
 	*slot = new_slot;
 	return CAIRO_STATUS_SUCCESS;
     }
+
+    if (user_data == NULL)
+	return CAIRO_STATUS_SUCCESS;
 
     status = _cairo_array_append (array, &new_slot);
     if (unlikely (status))

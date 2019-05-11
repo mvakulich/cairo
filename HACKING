@@ -24,7 +24,7 @@ Contact
 Various ways to get in touch with other cairo developers and maintainers
 have been enumerated at:
 
-	http://cairographics.org/contact/
+	https://cairographics.org/contact/
 
 Most of that information is also reflected in the following sections.
 
@@ -35,7 +35,7 @@ Mailing Lists
 There are various mailing lists that are useful when developing cairo
 code.  A complete list is always available at:
 
-	http://cairographics.org/lists/
+	https://cairographics.org/lists/
 
 It is recommended that cairo developers subscribe to all those lists.
 The cairo list by itself generates much more traffic than the others
@@ -48,7 +48,7 @@ Bug Tracking System
 
 We use a standard bugzilla bug tracking system available at:
 
-	http://bugs.freedesktop.org/
+	https://bugs.freedesktop.org/
 
 See file named BUGS for detailed information on reporting bugs.  In short,
 for straight bug reports, it's best to report them there such that they
@@ -71,11 +71,11 @@ Version Control System
 
 We use /git/ for version control.  See:
 
-	http://cairographics.org/download/
+	https://cairographics.org/download/
 
-TODO:
-Add links to some git tutorials or better, write a few paragraphs
-about how to use git to efficiently hack on cairo.
+For more information on using git, see:
+
+	https://freedesktop.org/wiki/Infrastructure/git/
 
 
 Build System
@@ -103,10 +103,9 @@ No manual ChangeLog writing is necessary.
 Copyrights and Licensing
 ------------------------
 
-The cairo library is dual-licensed under LGPL and MPL.  See file named
-COPYING for details.  The test suites are more liberal.  For example,
-GPL code is allowed in the test suites, though it's always better to
-keep things simple.
+The cairo library is dual-licensed under LGPL and MPL.  See the file
+named COPYING for details.  The test suites are more liberal, and are
+allowed to include GPL code.
 
 When writing new code, update the file headers to add your (or your
 employers) copyright line and contributor line.  If adding new files
@@ -166,7 +165,7 @@ See doc/public/README for more information.
 For more documentation including frequently asked questions, tutorials,
 samples, roadmap, todo list, etc visit:
 
-	http://cairographics.org/documentation/
+	https://cairographics.org/documentation/
 
 Some of those should gradually be moved to doc/.
 
@@ -174,9 +173,8 @@ Some of those should gradually be moved to doc/.
 Utilities
 ---------
 
-There are a few useful utilities we have developed that are either
-useful when writing code using cairo, or writing cairo, or useful in
-general.  These tools can be found under the util/ directory.
+We have developed several utilities useful for writing cairo or code
+that uses cairo.  These tools can be found under the util/ directory.
 See util/README for more information.
 
 

@@ -81,8 +81,11 @@
 
 #include <errno.h>
 
-#if HAVE_UNISTD_H && HAVE_FCNTL_H && HAVE_SIGNAL_H && HAVE_SYS_STAT_H && HAVE_SYS_SOCKET_H && HAVE_SYS_POLL_H && HAVE_SYS_UN_H
+#if HAVE_FCNTL_H
 #include <fcntl.h>
+#endif
+
+#if HAVE_UNISTD_H && HAVE_SIGNAL_H && HAVE_SYS_STAT_H && HAVE_SYS_SOCKET_H && HAVE_SYS_POLL_H && HAVE_SYS_UN_H
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -97,7 +100,7 @@
 #endif
 #endif
 
-#define ARRAY_LENGTH(A) (sizeof (A) / sizeof (A[0]))
+#define ARRAY_LENGTH(__array) ((int) (sizeof (__array) / sizeof (__array[0])))
 
 static int
 _cairo_writen (int fd, char *buf, int len)
@@ -198,6 +201,8 @@ write_ppm (cairo_surface_t *surface, int fd)
     case CAIRO_FORMAT_A1:
     case CAIRO_FORMAT_RGB16_565:
     case CAIRO_FORMAT_RGB30:
+    case CAIRO_FORMAT_RGB96F:
+    case CAIRO_FORMAT_RGBA128F:
     case CAIRO_FORMAT_INVALID:
     default:
 	return "unhandled image format";
@@ -241,6 +246,7 @@ write_ppm (cairo_surface_t *surface, int fd)
     return NULL;
 }
 
+#if CAIRO_HAS_INTERPRETER
 static cairo_surface_t *
 _create_image (void *closure,
 	       cairo_content_t content,
@@ -265,7 +271,6 @@ _create_image (void *closure,
     return cairo_surface_reference (*out);
 }
 
-#if CAIRO_HAS_INTERPRETER
 static const char *
 _cairo_script_render_page (const char *filename,
 			   cairo_surface_t **surface_out)
@@ -433,6 +438,7 @@ _rsvg_render_page (const char *filename,
     if (handle == NULL)
 	return error->message; /* XXX g_error_free */
 
+    rsvg_handle_set_dpi (handle, 72.0);
     rsvg_handle_get_dimensions (handle, &dimensions);
     surface = cairo_image_surface_create (CAIRO_FORMAT_ARGB32,
 					  dimensions.width,
@@ -870,8 +876,8 @@ main (int argc, char **argv)
 #endif
 #endif
 
-#if CAIRO_CAN_TEST_SVG_SURFACE
-    rsvg_set_default_dpi (72.0);
+#if defined(_WIN32) && !defined (__CYGWIN__)
+    _setmode (1, _O_BINARY);
 #endif
 
     if (argc == 1)

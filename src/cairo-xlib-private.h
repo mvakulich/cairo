@@ -37,8 +37,8 @@
 #ifndef CAIRO_XLIB_PRIVATE_H
 #define CAIRO_XLIB_PRIVATE_H
 
-#include "cairo-xlib.h"
 #include "cairo-xlib-xrender-private.h"
+#include "cairo-xlib.h"
 
 #include "cairo-compiler-private.h"
 #include "cairo-device-private.h"
@@ -104,7 +104,7 @@ struct _cairo_xlib_display {
      * We also use this variable as a guard against a second
      * independent bug with transformed repeating pictures:
      *
-     * http://lists.freedesktop.org/archives/cairo/2004-September/001839.html
+     * https://lists.freedesktop.org/archives/cairo/2004-September/001839.html
      *
      * Both are fixed in xorg >= 6.9 and hopefully in > 6.8.2, so
      * we can reuse the test for now.
@@ -373,6 +373,8 @@ _cairo_xlib_font_close (cairo_xlib_font_t *font);
 
 #define CAIRO_RENDER_HAS_PICTURE_TRANSFORM(surface)	CAIRO_RENDER_AT_LEAST((surface), 0, 6)
 #define CAIRO_RENDER_HAS_FILTERS(surface)	CAIRO_RENDER_AT_LEAST((surface), 0, 6)
+#define CAIRO_RENDER_HAS_FILTER_GOOD(surface) FALSE
+#define CAIRO_RENDER_HAS_FILTER_BEST(surface) FALSE
 
 #define CAIRO_RENDER_HAS_EXTENDED_REPEAT(surface)	CAIRO_RENDER_AT_LEAST((surface), 0, 10)
 #define CAIRO_RENDER_HAS_GRADIENTS(surface)	CAIRO_RENDER_AT_LEAST((surface), 0, 10)

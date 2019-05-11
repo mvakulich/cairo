@@ -32,9 +32,10 @@
  *	Chris Wilson <chris@chris-wilson.co.uk>
  */
 
-#include <cairo.h>
+#include "config.h"
 
 #include "cairo-script-private.h"
+#include "cairo.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -176,6 +177,17 @@ _csi_slab_free (csi_t *ctx, void *ptr, int size)
     *free_list = ctx->slabs[chunk_size].free_list;
     ctx->slabs[chunk_size].free_list = ptr;
 #endif
+}
+
+csi_status_t
+_csi_stack_push (csi_t *ctx, csi_stack_t *stack,
+		 const csi_object_t *obj)
+{
+    if (_csi_unlikely (stack->len == stack->size))
+	return _csi_stack_push_internal (ctx, stack, obj);
+
+    stack->objects[stack->len++] = *obj;
+    return CSI_STATUS_SUCCESS;
 }
 
 static void

@@ -20,6 +20,10 @@ if CAIRO_HAS_GL_SURFACE
 test_sources += $(gl_surface_test_sources)
 endif
 
+if CAIRO_HAS_EGL_FUNCTIONS
+test_sources += $(egl_surface_test_sources)
+endif
+
 # Need to add quartz-surface-source
 if CAIRO_HAS_QUARTZ_SURFACE
 test_sources += $(quartz_surface_test_sources)
@@ -77,7 +81,7 @@ noinst_SCRIPTS = check-refs.sh
 TESTS += cairo-test-suite$(EXEEXT)
 
 cairo-test-constructors.c: Makefile $(test_sources) make-cairo-test-constructors.sh
-	(cd $(srcdir) && sh ./make-cairo-test-constructors.sh $(test_sources)) > $@
+	(cd $(srcdir) && sh ./make-cairo-test-constructors.sh $(test_sources)) > $@ || (rm $@ ; exit 1)
 
 cairo_test_suite_SOURCES = 		\
 	$(cairo_test_suite_sources)	\
@@ -154,6 +158,7 @@ ps-features			\
 svg-clip			\
 svg-surface			\
 toy-font-face			\
+font-variations			\
 user-data
 
 # A target to summarise the failures
@@ -289,13 +294,13 @@ EXTRA_PROGRAMS += $(TESTS)
 # and TARGETS make var on the command line.  Same for the rest.
 TARGETS = $(CAIRO_TEST_TARGET)
 TARGETS_EXCLUDE = $(CAIRO_TEST_TARGET_EXCLUDE)
-NUM_THREADS = $(CAIRO_TEST_NUM_THREADS)
+FORMAT = $(CAIRO_TEST_TARGET_FORMAT)
 MODE = $(CAIRO_TEST_MODE)
 
 # Same about ENV vs CAIRO_TEST_ENV.  ENV is used with "make run" only
 ENV = $(CAIRO_TEST_ENV)
 
-TESTS_ENVIRONMENT = CAIRO_TEST_MODE="$(MODE)" CAIRO_TEST_TARGET="$(TARGETS)" CAIRO_TEST_TARGET_EXCLUDE="$(TARGETS_EXCLUDE)" CAIRO_TEST_NUM_THREADS="$(NUM_THREADS)" $(ENV)
+TESTS_ENVIRONMENT = CAIRO_TEST_MODE="$(MODE)" CAIRO_TEST_TARGET="$(TARGETS)" CAIRO_TEST_TARGET_FORMAT="$(FORMAT)" CAIRO_TEST_TARGET_EXCLUDE="$(TARGETS_EXCLUDE)" $(ENV)
 
 EXTRA_VALGRIND_FLAGS = $(CAIRO_EXTRA_VALGRIND_FLAGS)
 VALGRIND_FLAGS = \
@@ -318,6 +323,7 @@ CLEANFILES +=					\
 	ps-surface-source.out.ps		\
 	pdf-features.pdf			\
 	pdf-mime-data.out*			\
+	pdf-tagged-text.out*                    \
 	ps-features.ps				\
 	svg-clip.svg				\
 	svg-surface.svg				\

@@ -37,6 +37,7 @@
 #include "cairo-clip-inline.h"
 #include "cairo-clip-private.h"
 #include "cairo-composite-rectangles-private.h"
+#include "cairo-image-surface-inline.h"
 #include "cairo-image-surface-private.h"
 #include "cairo-list-inline.h"
 #include "cairo-region-private.h"
@@ -113,7 +114,7 @@ _cairo_xcb_picture_create (cairo_xcb_screen_t *screen,
 {
     cairo_xcb_picture_t *surface;
 
-    surface = malloc (sizeof (cairo_xcb_picture_t));
+    surface = _cairo_malloc (sizeof (cairo_xcb_picture_t));
     if (unlikely (surface == NULL))
 	return (cairo_xcb_picture_t *)
 	    _cairo_surface_create_in_error (_cairo_error (CAIRO_STATUS_NO_MEMORY));
@@ -121,7 +122,8 @@ _cairo_xcb_picture_create (cairo_xcb_screen_t *screen,
     _cairo_surface_init (&surface->base,
 			 &_cairo_xcb_picture_backend,
 			 &screen->connection->device,
-			 _cairo_content_from_pixman_format (pixman_format));
+			 _cairo_content_from_pixman_format (pixman_format),
+			 FALSE); /* is_vector */
 
     cairo_list_add (&surface->link, &screen->pictures);
 
@@ -393,11 +395,6 @@ _pattern_is_supported (uint32_t flags,
     if (pattern->type == CAIRO_PATTERN_TYPE_SOLID)
 	return TRUE;
 
-    if (! _cairo_matrix_is_integer_translation (&pattern->matrix, NULL, NULL)) {
-	if ((flags & CAIRO_XCB_RENDER_HAS_PICTURE_TRANSFORM) == 0)
-	    return FALSE;
-    }
-
     switch (pattern->extend) {
     default:
 	ASSERT_NOT_REACHED;
@@ -411,19 +408,22 @@ _pattern_is_supported (uint32_t flags,
     }
 
     if (pattern->type == CAIRO_PATTERN_TYPE_SURFACE) {
-	cairo_filter_t filter;
-
-	filter = pattern->filter;
-	if (_cairo_matrix_has_unity_scale (&pattern->matrix) &&
-	    _cairo_matrix_is_integer_translation (&pattern->matrix, NULL, NULL))
-	{
-	    filter = CAIRO_FILTER_NEAREST;
+	switch (pattern->filter) {
+	case CAIRO_FILTER_FAST:
+	case CAIRO_FILTER_NEAREST:
+	    return (flags & CAIRO_XCB_RENDER_HAS_PICTURE_TRANSFORM) ||
+		_cairo_matrix_is_integer_translation (&pattern->matrix, NULL, NULL);
+	case CAIRO_FILTER_GOOD:
+	    return flags & CAIRO_XCB_RENDER_HAS_FILTER_GOOD;
+	case CAIRO_FILTER_BEST:
+	    return flags & CAIRO_XCB_RENDER_HAS_FILTER_BEST;
+	case CAIRO_FILTER_BILINEAR:
+	case CAIRO_FILTER_GAUSSIAN:
+	default:
+	    return flags & CAIRO_XCB_RENDER_HAS_FILTERS;
 	}
-
-	if (! (filter == CAIRO_FILTER_NEAREST || filter == CAIRO_FILTER_FAST)) {
-	    if ((flags & CAIRO_XCB_RENDER_HAS_FILTERS) == 0)
-		return FALSE;
-	}
+    } else if (pattern->type == CAIRO_PATTERN_TYPE_MESH) {
+	return FALSE;
     } else { /* gradient */
 	if ((flags & CAIRO_XCB_RENDER_HAS_GRADIENTS) == 0)
 	    return FALSE;
@@ -435,9 +435,8 @@ _pattern_is_supported (uint32_t flags,
 	{
 	    return FALSE;
 	}
+	return TRUE;
     }
-
-    return pattern->type != CAIRO_PATTERN_TYPE_MESH;
 }
 
 static void
@@ -1033,9 +1032,7 @@ _cairo_xcb_surface_setup_surface_picture(cairo_xcb_picture_t *picture,
 
     filter = pattern->base.filter;
     if (filter != CAIRO_FILTER_NEAREST &&
-	_cairo_matrix_has_unity_scale (&pattern->base.matrix) &&
-	_cairo_fixed_is_integer (_cairo_fixed_from_double (pattern->base.matrix.x0)) &&
-	_cairo_fixed_is_integer (_cairo_fixed_from_double (pattern->base.matrix.y0)))
+        _cairo_matrix_is_pixel_exact (&pattern->base.matrix))
     {
 	filter = CAIRO_FILTER_NEAREST;
     }
@@ -1154,7 +1151,7 @@ _cairo_xcb_surface_picture (cairo_xcb_surface_t *target,
 
     if (source->type == CAIRO_SURFACE_TYPE_XCB)
     {
-	if (source->backend->type == CAIRO_SURFACE_TYPE_XCB) {
+	if (_cairo_surface_is_xcb(source)) {
 	    cairo_xcb_surface_t *xcb = (cairo_xcb_surface_t *) source;
 	    if (xcb->screen == target->screen && xcb->fallback == NULL) {
 		picture = _copy_to_picture ((cairo_xcb_surface_t *) source);
@@ -1296,9 +1293,12 @@ _cairo_xcb_surface_picture (cairo_xcb_surface_t *target,
 	    return picture;
     }
 
+    /* XXX: This causes too many problems and bugs, let's skip it for now. */
+#if 0
     _cairo_surface_attach_snapshot (source,
 				    &picture->base,
 				    NULL);
+#endif
 
     _cairo_xcb_surface_setup_surface_picture (picture, pattern, extents);
     return picture;
@@ -2789,7 +2789,7 @@ _upload_image_inplace (cairo_xcb_surface_t *surface,
 	return CAIRO_INT_STATUS_UNSUPPORTED;
 
     pattern = (const cairo_surface_pattern_t *) source;
-    if (pattern->surface->type != CAIRO_SURFACE_TYPE_IMAGE)
+    if (! _cairo_surface_is_image (pattern->surface))
 	return CAIRO_INT_STATUS_UNSUPPORTED;
 
     /* Have we already upload this image to a pixmap? */
@@ -2904,27 +2904,29 @@ _boxes_for_traps (cairo_boxes_t *boxes,
 		  cairo_traps_t *traps,
 		  cairo_antialias_t antialias)
 {
-    int i;
+    int i, j;
 
     _cairo_boxes_init (boxes);
 
-    boxes->num_boxes    = traps->num_traps;
     boxes->chunks.base  = (cairo_box_t *) traps->traps;
-    boxes->chunks.count = traps->num_traps;
     boxes->chunks.size  = traps->num_traps;
 
     if (antialias != CAIRO_ANTIALIAS_NONE) {
-	for (i = 0; i < traps->num_traps; i++) {
+	for (i = j = 0; i < traps->num_traps; i++) {
 	    /* Note the traps and boxes alias so we need to take the local copies first. */
 	    cairo_fixed_t x1 = traps->traps[i].left.p1.x;
 	    cairo_fixed_t x2 = traps->traps[i].right.p1.x;
 	    cairo_fixed_t y1 = traps->traps[i].top;
 	    cairo_fixed_t y2 = traps->traps[i].bottom;
 
-	    boxes->chunks.base[i].p1.x = x1;
-	    boxes->chunks.base[i].p1.y = y1;
-	    boxes->chunks.base[i].p2.x = x2;
-	    boxes->chunks.base[i].p2.y = y2;
+	    if (x1 == x2 || y1 == y2)
+		    continue;
+
+	    boxes->chunks.base[j].p1.x = x1;
+	    boxes->chunks.base[j].p1.y = y1;
+	    boxes->chunks.base[j].p2.x = x2;
+	    boxes->chunks.base[j].p2.y = y2;
+	    j++;
 
 	    if (boxes->is_pixel_aligned) {
 		boxes->is_pixel_aligned =
@@ -2935,7 +2937,7 @@ _boxes_for_traps (cairo_boxes_t *boxes,
     } else {
 	boxes->is_pixel_aligned = TRUE;
 
-	for (i = 0; i < traps->num_traps; i++) {
+	for (i = j = 0; i < traps->num_traps; i++) {
 	    /* Note the traps and boxes alias so we need to take the local copies first. */
 	    cairo_fixed_t x1 = traps->traps[i].left.p1.x;
 	    cairo_fixed_t x2 = traps->traps[i].right.p1.x;
@@ -2943,12 +2945,18 @@ _boxes_for_traps (cairo_boxes_t *boxes,
 	    cairo_fixed_t y2 = traps->traps[i].bottom;
 
 	    /* round down here to match Pixman's behavior when using traps. */
-	    boxes->chunks.base[i].p1.x = _cairo_fixed_round_down (x1);
-	    boxes->chunks.base[i].p1.y = _cairo_fixed_round_down (y1);
-	    boxes->chunks.base[i].p2.x = _cairo_fixed_round_down (x2);
-	    boxes->chunks.base[i].p2.y = _cairo_fixed_round_down (y2);
+	    boxes->chunks.base[j].p1.x = _cairo_fixed_round_down (x1);
+	    boxes->chunks.base[j].p1.y = _cairo_fixed_round_down (y1);
+	    boxes->chunks.base[j].p2.x = _cairo_fixed_round_down (x2);
+	    boxes->chunks.base[j].p2.y = _cairo_fixed_round_down (y2);
+
+	    j += (boxes->chunks.base[j].p1.x != boxes->chunks.base[j].p2.x &&
+		  boxes->chunks.base[j].p1.y != boxes->chunks.base[j].p2.y);
 	}
     }
+
+    boxes->num_boxes    = j;
+    boxes->chunks.count = j;
 }
 
 static cairo_status_t
@@ -3391,8 +3399,6 @@ _composite_mask_clip (void				*closure,
 	    return status;
 	}
     }
-
-    dst->deferred_clear = FALSE; /* assert(trap extents == extents); */
 
     status = _composite_traps (&info,
 			       dst, CAIRO_OPERATOR_SOURCE, mask_pattern,
@@ -4135,7 +4141,7 @@ _cairo_xcb_font_create (cairo_xcb_connection_t *connection,
     cairo_xcb_font_t	*priv;
     int i;
 
-    priv = malloc (sizeof (cairo_xcb_font_t));
+    priv = _cairo_malloc (sizeof (cairo_xcb_font_t));
     if (unlikely (priv == NULL))
 	return NULL;
 
@@ -4328,7 +4334,7 @@ _cairo_xcb_glyph_fini (cairo_scaled_glyph_private_t *glyph_private,
 	}
 
 	if (to_free == NULL) {
-	    to_free = malloc (sizeof (cairo_xcb_font_glyphset_free_glyphs_t));
+	    to_free = _cairo_malloc (sizeof (cairo_xcb_font_glyphset_free_glyphs_t));
 	    if (unlikely (to_free == NULL)) {
 		_cairo_error_throw (CAIRO_STATUS_NO_MEMORY);
 		return; /* XXX cannot propagate failure */
@@ -4355,7 +4361,7 @@ _cairo_xcb_glyph_attach (cairo_xcb_connection_t  *c,
 {
     cairo_xcb_glyph_private_t *priv;
 
-    priv = malloc (sizeof (*priv));
+    priv = _cairo_malloc (sizeof (*priv));
     if (unlikely (priv == NULL))
 	return _cairo_error (CAIRO_STATUS_NO_MEMORY);
 
@@ -4463,7 +4469,10 @@ _cairo_xcb_surface_add_glyph (cairo_xcb_connection_t *connection,
 	    const uint8_t *d;
 	    uint8_t *new, *n;
 
-	    new = malloc (c);
+	    if (c == 0)
+		break;
+
+	    new = _cairo_malloc (c);
 	    if (unlikely (new == NULL)) {
 		status = _cairo_error (CAIRO_STATUS_NO_MEMORY);
 		goto BAIL;
@@ -4491,7 +4500,10 @@ _cairo_xcb_surface_add_glyph (cairo_xcb_connection_t *connection,
 	    const uint32_t *d;
 	    uint32_t *new, *n;
 
-	    new = malloc (4 * c);
+	    if (c == 0)
+		break;
+
+	    new = _cairo_malloc (4 * c);
 	    if (unlikely (new == NULL)) {
 		status = _cairo_error (CAIRO_STATUS_NO_MEMORY);
 		goto BAIL;
@@ -4573,7 +4585,7 @@ _emit_glyphs_chunk (cairo_xcb_surface_t *dst,
     int i;
 
     if (estimated_req_size > ARRAY_LENGTH (stack_buf)) {
-	buf = malloc (estimated_req_size);
+	buf = _cairo_malloc (estimated_req_size);
 	if (unlikely (buf == NULL))
 	    return _cairo_error (CAIRO_STATUS_NO_MEMORY);
     }

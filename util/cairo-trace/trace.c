@@ -299,8 +299,10 @@ _type_next_token (Type *t)
 	prev = &b->next;
 	b = b->next;
     }
+    assert (prev != NULL);
 
     bb = malloc (sizeof (struct _bitmap));
+
     *prev = bb;
     bb->next = b;
     bb->min = min;
@@ -519,7 +521,7 @@ _fini_trace (void)
 
 /* Format a double in a locale independent way and trim trailing
  * zeros.  Based on code from Alex Larson <alexl@redhat.com>.
- * http://mail.gnome.org/archives/gtk-devel-list/2001-October/msg00087.html
+ * https://mail.gnome.org/archives/gtk-devel-list/2001-October/msg00087.html
  *
  * The code in the patch is copyright Red Hat, Inc under the LGPL.
  */
@@ -1508,6 +1510,8 @@ _format_to_string (cairo_format_t format)
 #define f(name) case CAIRO_FORMAT_ ## name: return #name
     switch (format) {
 	f(INVALID);
+	f(RGBA128F);
+	f(RGB96F);
 	f(ARGB32);
 	f(RGB30);
 	f(RGB24);
@@ -1525,8 +1529,10 @@ _format_to_content_string (cairo_format_t format)
     switch (format) {
     case CAIRO_FORMAT_INVALID:
 	return "INVALID";
+    case CAIRO_FORMAT_RGBA128F:
     case CAIRO_FORMAT_ARGB32:
 	return "COLOR_ALPHA";
+    case CAIRO_FORMAT_RGB96F:
     case CAIRO_FORMAT_RGB30:
     case CAIRO_FORMAT_RGB24:
     case CAIRO_FORMAT_RGB16_565:
@@ -1582,6 +1588,10 @@ _status_to_string (cairo_status_t status)
 	f(INVALID_MESH_CONSTRUCTION);
 	f(DEVICE_FINISHED);
 	f(JBIG2_GLOBAL_MISSING);
+	f(PNG_ERROR);
+	f(FREETYPE_ERROR);
+	f(WIN32_GDI_ERROR);
+	f(TAG_ERROR);
     case CAIRO_STATUS_LAST_STATUS:
 	break;
     }
@@ -1667,6 +1677,8 @@ _emit_image (cairo_surface_t *image,
     case CAIRO_FORMAT_RGB30:
     case CAIRO_FORMAT_INVALID:
     case CAIRO_FORMAT_ARGB32: len = 4*width; break;
+    case CAIRO_FORMAT_RGB96F: len = 12*width; break;
+    case CAIRO_FORMAT_RGBA128F: len = 16*width; break;
     }
 
     _trace_printf ("  /source ");
@@ -1674,24 +1686,6 @@ _emit_image (cairo_surface_t *image,
 
 #ifdef WORDS_BIGENDIAN
     switch (format) {
-    case CAIRO_FORMAT_A1:
-	for (row = height; row--; ) {
-	    _write_data (&stream, data, (width+7)/8);
-	    data += stride;
-	}
-	break;
-    case CAIRO_FORMAT_A8:
-	for (row = height; row--; ) {
-	    _write_data (&stream, data, width);
-	    data += stride;
-	}
-	break;
-    case CAIRO_FORMAT_RGB16_565:
-	for (row = height; row--; ) {
-	    _write_data (&stream, data, 2*width);
-	    data += stride;
-	}
-	break;
     case CAIRO_FORMAT_RGB24:
 	for (row = height; row--; ) {
 	    int col;
@@ -1703,10 +1697,15 @@ _emit_image (cairo_surface_t *image,
 	    data += stride;
 	}
 	break;
+    case CAIRO_FORMAT_A1:
+    case CAIRO_FORMAT_A8:
+    case CAIRO_FORMAT_RGB16_565:
     case CAIRO_FORMAT_RGB30:
     case CAIRO_FORMAT_ARGB32:
+    case CAIRO_FORMAT_RGB96F:
+    case CAIRO_FORMAT_RGBA128F:
 	for (row = height; row--; ) {
-	    _write_data (&stream, data, 4*width);
+	    _write_data (&stream, data, len);
 	    data += stride;
 	}
 	break;
@@ -1763,6 +1762,8 @@ _emit_image (cairo_surface_t *image,
 	    data += stride;
 	}
 	break;
+    case CAIRO_FORMAT_RGB96F:
+    case CAIRO_FORMAT_RGBA128F:
     case CAIRO_FORMAT_RGB30:
     case CAIRO_FORMAT_ARGB32:
 	for (row = height; row--; ) {
@@ -1771,11 +1772,11 @@ _emit_image (cairo_surface_t *image,
 	    int col;
 	    for (col = 0; col < width; col++)
 		dst[col] = bswap_32 (src[col]);
-	    _write_data (&stream, rowdata, 4*width);
+	    _write_data (&stream, rowdata, len);
 	    data += stride;
 	}
 	break;
-    case CAIRO_FORMAT_INVALID:
+   case CAIRO_FORMAT_INVALID:
     default:
 	break;
     }
@@ -3738,8 +3739,7 @@ cairo_surface_create_similar_image (cairo_surface_t *other,
 	else
 	    _trace_printf ("%d index ",
 			   current_stack_depth - other_obj->operand - 1);
-	_trace_printf ("s%ld //%s %d %d similar-image %% s%ld\n",
-		       _get_surface_id (other),
+	_trace_printf ("//%s %d %d similar-image %% s%ld\n",
 		       _format_to_string (format),
 		       width, height,
 		       new_obj->token);
@@ -4331,13 +4331,24 @@ cairo_ft_font_face_create_for_pattern (FcPattern *pattern)
 
 	obj = _get_object (FONT_FACE, ret);
 	if (obj->unknown) {
-		FcChar8 *parsed;
+		FcPattern *copy;
+		FcChar8 *unparsed;
 
-		parsed = DLCALL (FcNameUnparse, pattern);
+		copy = DLCALL (FcPatternDuplicate, pattern);
+		if (copy)
+		{
+			DLCALL (FcPatternDel, copy, FC_LANG);
+			DLCALL (FcPatternDel, copy, FC_CHARSET);
+			DLCALL (FcPatternDel, copy, FC_CAPABILITY);
+		}
+		else
+			copy = pattern;
+
+		unparsed = DLCALL (FcNameUnparse, copy);
 		_trace_printf ("dict\n"
 			       "  /type 42 set\n"
 			       "  /pattern ");
-		_emit_string_literal ((char *) parsed, -1);
+		_emit_string_literal ((char *) unparsed, -1);
 		_trace_printf (" set\n"
 			       "  font %% f%ld\n",
 			       font_face_id);
@@ -4345,7 +4356,9 @@ cairo_ft_font_face_create_for_pattern (FcPattern *pattern)
 		_push_operand (FONT_FACE, ret);
 		dump_stack(__func__);
 
-		free (parsed);
+		if (copy != pattern)
+			DLCALL (FcPatternDestroy, copy);
+		free (unparsed);
 	}
 	_write_unlock ();
     }

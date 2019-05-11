@@ -54,8 +54,6 @@ typedef struct _pdf_target_closure
     cairo_surface_t	*target;
 } pdf_target_closure_t;
 
-#define ARRAY_LENGTH(__array) ((int) (sizeof (__array) / sizeof (__array[0])))
-
 static cairo_surface_t *
 _cairo_boilerplate_pdf_create_surface (const char		 *name,
 				       cairo_content_t		  content,
@@ -86,6 +84,7 @@ _cairo_boilerplate_pdf_create_surface (const char		 *name,
     if (cairo_surface_status (surface))
 	goto CLEANUP_FILENAME;
 
+    cairo_pdf_surface_set_metadata (surface, CAIRO_PDF_METADATA_CREATE_DATE, NULL);
     cairo_surface_set_fallback_resolution (surface, 72., 72.);
 
     if (content == CAIRO_CONTENT_COLOR) {

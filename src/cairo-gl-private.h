@@ -60,12 +60,15 @@
 
 #include <assert.h>
 
-#if CAIRO_HAS_GL_SURFACE
-#include <GL/gl.h>
-#include <GL/glext.h>
+#if CAIRO_HAS_GLESV3_SURFACE
+#include <GLES3/gl3.h>
+#include <GLES3/gl3ext.h>
 #elif CAIRO_HAS_GLESV2_SURFACE
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
+#elif CAIRO_HAS_GL_SURFACE
+#include <GL/gl.h>
+#include <GL/glext.h>
 #endif
 
 #include "cairo-gl-ext-def-private.h"
@@ -93,19 +96,21 @@
 
 /* VBO size that we allocate, smaller size means we gotta flush more often,
  * but larger means hogging more memory and can cause trouble for drivers
- * (especially on embedded devices). */
-#define CAIRO_GL_VBO_SIZE (16*1024)
+ * (especially on embedded devices). Use the CAIRO_GL_VBO_SIZE environment
+ * variable to set this to a different size. */
+#define CAIRO_GL_VBO_SIZE_DEFAULT (1024*1024)
 
 typedef struct _cairo_gl_surface cairo_gl_surface_t;
 
-/* GL flavor */
+/* GL flavor is the type of GL supported by the underlying platform. */
 typedef enum cairo_gl_flavor {
     CAIRO_GL_FLAVOR_NONE = 0,
     CAIRO_GL_FLAVOR_DESKTOP = 1,
-    CAIRO_GL_FLAVOR_ES = 2
+    CAIRO_GL_FLAVOR_ES2 = 2,
+    CAIRO_GL_FLAVOR_ES3 = 3
 } cairo_gl_flavor_t;
 
-/* Indices for vertex attributes used by BindAttribLocation etc */
+/* Indices for vertex attributes used by BindAttribLocation, etc. */
 enum {
     CAIRO_GL_VERTEX_ATTRIB_INDEX = 0,
     CAIRO_GL_COLOR_ATTRIB_INDEX  = 1,
@@ -168,7 +173,7 @@ struct _cairo_gl_surface {
     GLuint fb; /* GL framebuffer object wrapping our data. */
     GLuint depth_stencil; /* GL renderbuffer object for holding stencil buffer clip. */
 
-#if CAIRO_HAS_GL_SURFACE
+#if CAIRO_HAS_GL_SURFACE || CAIRO_HAS_GLESV3_SURFACE
     GLuint msaa_rb; /* The ARB MSAA path uses a renderbuffer. */
     GLuint msaa_fb;
 #endif
@@ -177,8 +182,12 @@ struct _cairo_gl_surface {
     cairo_bool_t stencil_and_msaa_caps_initialized;
     cairo_bool_t supports_stencil; /* Stencil support for for non-texture surfaces. */
     cairo_bool_t supports_msaa;
+    GLint        num_samples;
     cairo_bool_t msaa_active; /* Whether the multisampling
 			         framebuffer is active or not. */
+    cairo_bool_t content_in_texture; /* whether we just uploaded image
+					to texture, used for certain
+					gles2 extensions and glesv3 */
     cairo_clip_t *clip_on_stencil_buffer;
 
     int owns_tex;
@@ -361,6 +370,7 @@ struct _cairo_gl_context {
     cairo_gl_operand_t operands[2];
     cairo_bool_t spans;
 
+    unsigned int vbo_size;
     unsigned int vb_offset;
     unsigned int vertex_size;
     cairo_region_t *clip_region;
@@ -702,6 +712,9 @@ _cairo_gl_get_version (void);
 cairo_private cairo_gl_flavor_t
 _cairo_gl_get_flavor (void);
 
+cairo_private unsigned long
+_cairo_gl_get_vbo_size (void);
+
 cairo_private cairo_bool_t
 _cairo_gl_has_extension (const char *ext);
 
@@ -795,6 +808,10 @@ _cairo_gl_composite_glyphs_with_clip (void			    *_dst,
 				      int			     dst_y,
 				      cairo_composite_glyphs_info_t *info,
 				      cairo_clip_t		    *clip);
+
+cairo_private void
+_cairo_gl_ensure_framebuffer (cairo_gl_context_t *ctx,
+                              cairo_gl_surface_t *surface);
 
 cairo_private cairo_surface_t *
 _cairo_gl_surface_create_scratch (cairo_gl_context_t   *ctx,

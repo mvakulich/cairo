@@ -530,9 +530,9 @@ static void
 _cairo_xcb_surface_get_font_options (void *abstract_surface,
 				     cairo_font_options_t *options)
 {
-    /* XXX  copy from xlib */
-    _cairo_font_options_init_default (options);
-    _cairo_font_options_set_round_glyph_positions (options, CAIRO_ROUND_GLYPH_POS_ON);
+    cairo_xcb_surface_t *surface = abstract_surface;
+
+    *options = *_cairo_xcb_screen_get_font_options (surface->screen);
 }
 
 static cairo_status_t
@@ -646,9 +646,8 @@ _put_shm_image_boxes (cairo_xcb_surface_t    *surface,
 						     shm_info->offset);
 	    }
 	}
+	return CAIRO_INT_STATUS_SUCCESS;
     }
-
-    return CAIRO_INT_STATUS_SUCCESS;
 #endif
 
     return CAIRO_INT_STATUS_UNSUPPORTED;
@@ -692,15 +691,15 @@ _put_image_boxes (cairo_xcb_surface_t    *surface,
 			    int y = _cairo_fixed_integer_part (b->p1.y);
 			    int width = _cairo_fixed_integer_part (b->p2.x - b->p1.x);
 			    int height = _cairo_fixed_integer_part (b->p2.y - b->p1.y);
-			    _cairo_xcb_connection_put_image (surface->connection,
-							     surface->drawable, gc,
-							     width, height,
-							     x, y,
-							     image->depth,
-							     image->stride,
-							     image->data +
-							     x * PIXMAN_FORMAT_BPP (image->pixman_format) / 8 +
-							     y * image->stride);
+			    _cairo_xcb_connection_put_subimage (surface->connection,
+								surface->drawable, gc,
+								x, y,
+								width, height,
+								PIXMAN_FORMAT_BPP (image->pixman_format) / 8,
+								image->stride,
+								x, y,
+								image->depth,
+								image->data);
 
 		    }
 	    }
@@ -834,12 +833,13 @@ _cairo_xcb_surface_fallback (cairo_xcb_surface_t *surface,
     image = (cairo_image_surface_t *)
 	    _get_image (surface, TRUE, 0, 0, surface->width, surface->height);
 
-    /* If there was a deferred clear, _get_image applied it */
-    if (image->base.status == CAIRO_STATUS_SUCCESS) {
-	surface->deferred_clear = FALSE;
+    if (image->base.status != CAIRO_STATUS_SUCCESS)
+	return &image->base;
 
-	surface->fallback = image;
-    }
+    /* If there was a deferred clear, _get_image applied it */
+    surface->deferred_clear = FALSE;
+
+    surface->fallback = image;
 
     return &surface->fallback->base;
 }
@@ -1075,14 +1075,15 @@ _cairo_xcb_surface_create_internal (cairo_xcb_screen_t		*screen,
 {
     cairo_xcb_surface_t *surface;
 
-    surface = malloc (sizeof (cairo_xcb_surface_t));
+    surface = _cairo_malloc (sizeof (cairo_xcb_surface_t));
     if (unlikely (surface == NULL))
 	return _cairo_surface_create_in_error (_cairo_error (CAIRO_STATUS_NO_MEMORY));
 
     _cairo_surface_init (&surface->base,
 			 &_cairo_xcb_surface_backend,
 			 &screen->connection->device,
-			 _cairo_content_from_pixman_format (pixman_format));
+			 _cairo_content_from_pixman_format (pixman_format),
+			 FALSE); /* is_vector */
 
     surface->connection = _cairo_xcb_connection_reference (screen->connection);
     surface->screen = screen;
@@ -1432,7 +1433,7 @@ cairo_xcb_surface_set_size (cairo_surface_t *abstract_surface,
     }
 
 
-    if (abstract_surface->type != CAIRO_SURFACE_TYPE_XCB) {
+    if ( !_cairo_surface_is_xcb(abstract_surface)) {
 	_cairo_surface_set_error (abstract_surface,
 				  _cairo_error (CAIRO_STATUS_SURFACE_TYPE_MISMATCH));
 	return;
@@ -1486,7 +1487,7 @@ cairo_xcb_surface_set_drawable (cairo_surface_t *abstract_surface,
     }
 
 
-    if (abstract_surface->type != CAIRO_SURFACE_TYPE_XCB) {
+    if ( !_cairo_surface_is_xcb(abstract_surface)) {
 	_cairo_surface_set_error (abstract_surface,
 				  _cairo_error (CAIRO_STATUS_SURFACE_TYPE_MISMATCH));
 	return;

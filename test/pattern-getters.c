@@ -24,8 +24,8 @@
  * Author: Vladimir Vukicevic <vladimir@pobox.com>
  */
 
-#include <stdlib.h>
 #include "cairo-test.h"
+#include <stdlib.h>
 
 #define CHECK_SUCCESS do { \
     if (status) { \
@@ -67,7 +67,7 @@ draw (cairo_t *cr, int width, int height)
 	    !CAIRO_TEST_DOUBLE_EQUALS(g,0.3) ||
 	    !CAIRO_TEST_DOUBLE_EQUALS(b,0.4) ||
 	    !CAIRO_TEST_DOUBLE_EQUALS(a,0.5)) {
-	    cairo_test_log (ctx, "Error: cairo_pattern_get_rgba returned unexepcted results: %g, %g, %g, %g\n",
+	    cairo_test_log (ctx, "Error: cairo_pattern_get_rgba returned unexpected results: %g, %g, %g, %g\n",
 			    r, g, b, a);
 	    cairo_pattern_destroy (pat);
 	    return CAIRO_TEST_FAILURE;
