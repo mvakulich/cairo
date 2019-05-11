@@ -495,6 +495,23 @@ if(CAIRO_HAS_SVG_SURFACE)
 list(APPEND enabled_cairo_pkgconf cairo-svg.pc)
 endif()
 
+
+list(APPEND supported_cairo_headers ${cairo_binary_headers})
+list(APPEND all_cairo_headers ${cairo_binary_headers})
+list(APPEND all_cairo_private ${cairo_binary_private})
+list(APPEND all_cairo_cxx_sources ${cairo_binary_cxx_sources})
+list(APPEND all_cairo_sources ${cairo_binary_sources})
+if(CAIRO_HAS_BINARY_SURFACE)
+list(APPEND enabled_cairo_headers ${cairo_binary_headers})
+list(APPEND enabled_cairo_private ${cairo_binary_private})
+list(APPEND enabled_cairo_cxx_sources ${cairo_binary_cxx_sources})
+list(APPEND enabled_cairo_sources ${cairo_binary_sources})
+endif()
+list(APPEND all_cairo_pkgconf cairo-binary.pc)
+if(CAIRO_HAS_BINARY_SURFACE)
+list(APPEND enabled_cairo_pkgconf cairo-binary.pc)
+endif()
+
 list(APPEND all_cairo_private ${cairo_test_surfaces_private} ${cairo_test_surfaces_headers})
 list(APPEND all_cairo_cxx_sources ${cairo_test_surfaces_cxx_sources})
 list(APPEND all_cairo_sources ${cairo_test_surfaces_sources})
@@ -637,6 +654,7 @@ list(APPEND enabled_cairo_private ${cairo_symbol_lookup_private} ${cairo_symbol_
 list(APPEND enabled_cairo_cxx_sources ${cairo_symbol_lookup_cxx_sources})
 list(APPEND enabled_cairo_sources ${cairo_symbol_lookup_sources})
 endif()
+
 
 set(SOURCES ${enabled_cairo_sources})
 

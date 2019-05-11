@@ -9,6 +9,7 @@ find_package(ZLIB REQUIRED)
 find_package(Freetype)
 find_package(Threads)
 find_package(Fontconfig)
+find_package(LibRSVG)
 
 if(APPLE)
     message(STATUS "MAC OS X")
@@ -33,6 +34,10 @@ if(FONTCONFIG_FOUND)
     list(APPEND CAIRO_LIBS ${FONTCONFIG_LIBRARY})
 endif()
 
+if(FONTCONFIG_FOUND)
+    list(APPEND CAIRO_LIBS ${LibRSVG_LIBRARIES})
+endif()
+
 if(FREETYPE_FOUND)
     find_package(BZip2)
     include_directories(${FREETYPE_INCLUDE_DIRS})
@@ -40,12 +45,13 @@ if(FREETYPE_FOUND)
     list(APPEND CAIRO_LIBS ${FREETYPE_LIBRARIES} ${BZIP2_LIBRARIES})
 endif()
 
+
+
 if(APPLE)
     find_library(ObjC objc)
 	find_library(CoreFoundation CoreFoundation)
 	find_library(IOKit IOKit)
     find_library(AppKit AppKit)
-
     list(APPEND CAIRO_LIBS ${CoreFoundation} ${IOKit} ${ObjC} ${AppKit})
 endif()
 

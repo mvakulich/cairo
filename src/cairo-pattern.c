@@ -4683,6 +4683,7 @@ _cairo_debug_print_surface_pattern (FILE *file,
     case CAIRO_SURFACE_TYPE_BEOS: s = "beos"; break;
     case CAIRO_SURFACE_TYPE_DIRECTFB: s = "directfb"; break;
     case CAIRO_SURFACE_TYPE_SVG: s = "svg"; break;
+    case CAIRO_SURFACE_TYPE_BINARY: s = "binary"; break;
     case CAIRO_SURFACE_TYPE_OS2: s = "os2"; break;
     case CAIRO_SURFACE_TYPE_WIN32_PRINTING: s = "win32_printing"; break;
     case CAIRO_SURFACE_TYPE_QUARTZ_IMAGE: s = "quartz_image"; break;

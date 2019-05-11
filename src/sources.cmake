@@ -246,6 +246,11 @@ set(cairo_svg_headers  cairo-svg.h)
 set(cairo_svg_private  cairo-svg-surface-private.h)
 set(cairo_svg_sources  cairo-svg-surface.c)
 
+
+set(cairo_binary_headers  binary-render/cairo-binary.h)
+set(cairo_binary_private  binary-render/cairo-binary-surface-private.h)
+set(cairo_binary_sources  binary-render/cairo-binary-surface.c)
+
 set(cairo_ft_headers  cairo-ft.h)
 set(cairo_ft_private  cairo-ft-private.h)
 set(cairo_ft_sources  cairo-ft-font.c)

@@ -41,5 +41,7 @@
 #cmakedefine CAIRO_HAS_TRACE 1
 #cmakedefine CAIRO_HAS_INTERPRETER 1
 #cmakedefine CAIRO_HAS_SYMBOL_LOOKUP 1
+#cmakedefine CAIRO_HAS_BINARY_SURFACE 1
+
 
 #endif

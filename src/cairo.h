@@ -2423,7 +2423,8 @@ typedef enum _cairo_surface_type {
     CAIRO_SURFACE_TYPE_XML,
     CAIRO_SURFACE_TYPE_SKIA,
     CAIRO_SURFACE_TYPE_SUBSURFACE,
-    CAIRO_SURFACE_TYPE_COGL
+    CAIRO_SURFACE_TYPE_COGL,
+	CAIRO_SURFACE_TYPE_BINARY
 } cairo_surface_type_t;
 
 cairo_public cairo_surface_type_t
