@@ -10,6 +10,9 @@ find_package(Freetype)
 find_package(Threads)
 find_package(Fontconfig)
 
+if(APPLE)
+    message(STATUS "MAC OS X")
+endif()
 
 include(Configure_config.cmake)
 include(Configure_features.cmake)
@@ -36,6 +39,17 @@ if(FREETYPE_FOUND)
     include_directories(${BZIP2_INCLUDE_DIR})
     list(APPEND CAIRO_LIBS ${FREETYPE_LIBRARIES} ${BZIP2_LIBRARIES})
 endif()
+
+if(APPLE)
+    find_library(ObjC objc)
+	find_library(CoreFoundation CoreFoundation)
+	find_library(IOKit IOKit)
+    find_library(AppKit AppKit)
+
+    list(APPEND CAIRO_LIBS ${CoreFoundation} ${IOKit} ${ObjC} ${AppKit})
+endif()
+
+
 
 include_directories(src)
 add_subdirectory(src)
