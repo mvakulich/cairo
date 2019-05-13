@@ -35,6 +35,10 @@ if(VALGRIND_FOUND)
 	set(HAVE_VALGRIND 1)
 endif()
 
+if(ZLIB_FOUND)
+    set(HAVE_ZLIB 1)
+endif()
+
 check_include_file( "byteswap.h" HAVE_BYTESWAP_H )
 check_include_file( "dirent.h" HAVE_DIRENT_H )
 check_include_file( "dlfcn.h" HAVE_DLFCN_H )

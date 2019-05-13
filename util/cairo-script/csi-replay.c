@@ -298,6 +298,18 @@ _svg_surface_create (void *closure,
 }
 #endif
 
+#if CAIRO_HAS_BINARY_SURFACE
+#include <binary-render/cairo-binary.h>
+static cairo_surface_t *
+_binary_surface_create (void *closure,
+		     cairo_content_t content,
+		     double width, double height,
+		     long uid)
+{
+    return cairo_binary_surface_create_for_stream (NULL, NULL, width, height);
+}
+#endif
+
 static cairo_surface_t *
 _image_surface_create (void *closure,
 		       cairo_content_t content,
@@ -326,6 +338,8 @@ main (int argc, char **argv)
 	.surface_create = _ps_surface_create
 #elif CAIRO_SVG_SURFACE
 	.surface_create = _svg_surface_create
+#elif CAIRO_BINARY_SURFACE 
+	.surface_create = _binary_surface_create
 #else
 	.surface_create = _image_surface_create
 #endif
@@ -353,6 +367,9 @@ main (int argc, char **argv)
 #endif
 #if CAIRO_HAS_SVG_SURFACE
 	{ "--svg", _svg_surface_create },
+#endif
+#if CAIRO_HAS_BINARY_SURFACE
+	{ "--bin", _binary_surface_create },
 #endif
 	{ NULL, NULL }
     };
