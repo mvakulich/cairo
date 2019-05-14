@@ -10,6 +10,7 @@ find_package(Freetype)
 find_package(Threads)
 find_package(Fontconfig)
 find_package(LibRSVG)
+find_package(OPENGL)
 
 if(APPLE)
     message(STATUS "MAC OS X")
