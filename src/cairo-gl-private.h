@@ -67,8 +67,8 @@
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 #elif CAIRO_HAS_GL_SURFACE
-#include <GL/gl.h>
-#include <GL/glext.h>
+#include <gl.h>
+#include <glext.h>
 #endif
 
 #include "cairo-gl-ext-def-private.h"

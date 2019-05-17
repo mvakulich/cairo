@@ -58,8 +58,8 @@
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 #elif CAIRO_HAS_GL_SURFACE
-#include <GL/gl.h>
-#include <GL/glext.h>
+#include <gl.h>
+#include <glext.h>
 #endif
 
 #define CAIRO_GL_GRADIENT_CACHE_SIZE 4096

@@ -306,7 +306,7 @@ _binary_surface_create (void *closure,
 		     double width, double height,
 		     long uid)
 {
-    return cairo_binary_surface_create_for_stream (NULL, NULL, width, height);
+    return cairo_binary_surface_create ("/Users/mishavakulich/Desktop/out.svg", width, height);
 }
 #endif
 

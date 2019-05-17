@@ -954,12 +954,17 @@ _cairo_binary_document_emit_outline_glyph_data (cairo_binary_document_t	*documen
 					 &scaled_glyph);
     if (unlikely (status))
 	return status;
-
+    
     _cairo_output_stream_printf (document->xml_node_glyphs,
-				 "<path style=\"stroke:none;\" ");
+                                 "<glyph unicode=\"&#x%04lx;\" style=\"stroke:none;\" ", glyph_index);
 
+    
+    cairo_matrix_t inverse;
+    double font_scale = 1024.0/scaled_font->max_scale;
+    double font_descent = scaled_font->extents.descent * font_scale;
+    cairo_matrix_init(&inverse, font_scale, 0, 0, -font_scale, 0, font_descent);
     _cairo_binary_surface_emit_path (document->xml_node_glyphs,
-				  scaled_glyph->path, NULL);
+				  scaled_glyph->path, &inverse);
 
     _cairo_output_stream_printf (document->xml_node_glyphs,
 				 "/>\n");
@@ -1026,10 +1031,10 @@ _cairo_binary_document_emit_glyph (cairo_binary_document_t	*document,
 {
     cairo_int_status_t	     status;
 
-    _cairo_output_stream_printf (document->xml_node_glyphs,
-				 "<symbol overflow=\"visible\" id=\"glyph%d-%d\">\n",
-				 font_id,
-				 subset_glyph_index);
+//    _cairo_output_stream_printf (document->xml_node_glyphs,
+//                 "<symbol overflow=\"visible\" id=\"glyph%d-%d\">\n",
+//                 font_id,
+//                 subset_glyph_index);
 
     status = _cairo_binary_document_emit_outline_glyph_data (document,
 							  scaled_font,
@@ -1041,7 +1046,7 @@ _cairo_binary_document_emit_glyph (cairo_binary_document_t	*document,
     if (unlikely (status))
 	return status;
 
-    _cairo_output_stream_printf (document->xml_node_glyphs, "</symbol>\n");
+//    _cairo_output_stream_printf (document->xml_node_glyphs, "</symbol>\n");
 
     return CAIRO_INT_STATUS_SUCCESS;
 }
@@ -1054,6 +1059,14 @@ _cairo_binary_document_emit_font_subset (cairo_scaled_font_subset_t	*font_subset
     cairo_int_status_t status = CAIRO_INT_STATUS_SUCCESS;
     unsigned int i;
 
+    _cairo_output_stream_printf (document->xml_node_glyphs,
+                                 "<font id=\"%d\" horiz-adv-x=\"0\">\n",
+                                 font_subset->font_id);
+    _cairo_output_stream_printf (document->xml_node_glyphs,
+                                 "<font-face units-per-em=\"1024\" ascent=\"1024\" descent=\"0\" font-family=\"%d\" font-weight=\"normal\" />\n",
+                                 font_subset->font_id);
+    _cairo_output_stream_printf (document->xml_node_glyphs,
+                                 "<missing-glyph horiz-adv-x=\"0\" />");
     _cairo_scaled_font_freeze_cache (font_subset->scaled_font);
     for (i = 0; i < font_subset->num_glyphs; i++) {
 	status = _cairo_binary_document_emit_glyph (document,
@@ -1063,6 +1076,8 @@ _cairo_binary_document_emit_font_subset (cairo_scaled_font_subset_t	*font_subset
 	if (unlikely (status))
 	    break;
     }
+    _cairo_output_stream_printf (document->xml_node_glyphs,
+                                 "</font>\n");
     _cairo_scaled_font_thaw_cache (font_subset->scaled_font);
 
     return status;
