@@ -9,8 +9,10 @@ find_package(ZLIB REQUIRED)
 find_package(FREETYPE)
 find_package(Threads)
 find_package(Fontconfig)
-find_package(LibRSVG)
 find_package(OPENGL)
+find_package(Glib)
+find_package(PopplerGlib)
+
 
 message(STATUS "FREETYPE_LIBRARY ${FREETYPE_LIBRARY}")
 if(APPLE)
@@ -37,9 +39,6 @@ if(FONTCONFIG_FOUND)
     list(APPEND CAIRO_LIBS ${FONTCONFIG_LIBRARY})
 endif()
 
-if(FONTCONFIG_FOUND)
-    list(APPEND CAIRO_LIBS ${LibRSVG_LIBRARIES})
-endif()
 
 if(LibRSVG_FOUND)
     list(APPEND CAIRO_LIBS ${LibRSVG_LIBRARIES})
@@ -70,3 +69,4 @@ include_directories(src)
 add_subdirectory(src)
 
 add_subdirectory(util/cairo-script)
+add_subdirectory(util/cairo-pdf)

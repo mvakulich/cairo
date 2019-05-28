@@ -163,7 +163,8 @@ _cairo_path_fixed_fill_is_empty (const cairo_path_fixed_t *path)
 static inline cairo_bool_t
 _cairo_path_fixed_fill_is_rectilinear (const cairo_path_fixed_t *path)
 {
-    if (! path->fill_is_rectilinear)
+    return 0;
+    if (! path->fill_is_rectilinear || path->buf.base.num_ops > 4)
 	return 0;
 
     if (! path->has_current_point || path->needs_move_to)

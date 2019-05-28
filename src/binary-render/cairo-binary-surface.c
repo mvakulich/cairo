@@ -2437,11 +2437,13 @@ _cairo_binary_surface_fill (void			*abstract_surface,
     cairo_binary_surface_t *surface = abstract_surface;
     cairo_status_t status;
 
+    //TODO: check path for visibility, i.e. remove pathes which are almost invisible, less than 1px wide
     if (surface->paginated_mode == CAIRO_PAGINATED_MODE_ANALYZE)
 	return _cairo_binary_surface_analyze_operation (surface, op, source);
 
     assert (_cairo_binary_surface_operation_supported (surface, op, source));
 
+    //TODO: check if clip actually clip something
     status = _cairo_surface_clipper_set_clip (&surface->clipper, clip);
     if (unlikely (status))
 	return status;
@@ -2828,6 +2830,30 @@ _cairo_binary_surface_get_supported_mime_types (void	   *abstract_surface)
     return _cairo_binary_supported_mime_types;
 }
 
+static cairo_bool_t
+_cairo_binary_surface_has_show_text_glyphs    (void            *abstract_surface)
+{
+    return TRUE;
+}
+
+static cairo_int_status_t
+_cairo_binary_surface_show_text_glyphs (void            *abstract_surface,
+                                     cairo_operator_t         op,
+                                     const cairo_pattern_t    *source,
+                                     const char                 *utf8,
+                                     int                         utf8_len,
+                                     cairo_glyph_t        *glyphs,
+                                     int             num_glyphs,
+                                     const cairo_text_cluster_t *clusters,
+                                     int                         num_clusters,
+                                     cairo_text_cluster_flags_t  cluster_flags,
+                                     cairo_scaled_font_t    *scaled_font,
+                                     const cairo_clip_t        *clip)
+{
+    //TODO: save text glyphs for font creation;
+    return CAIRO_INT_STATUS_UNSUPPORTED;
+}
+
 static const cairo_surface_backend_t cairo_binary_surface_backend = {
 	CAIRO_SURFACE_TYPE_BINARY,
 	_cairo_binary_surface_finish,
@@ -2859,8 +2885,8 @@ static const cairo_surface_backend_t cairo_binary_surface_backend = {
 	_cairo_binary_surface_fill,
 	_cairo_binary_surface_fill_stroke,
 	_cairo_binary_surface_show_glyphs,
-	NULL, /* has_show_text_glyphs */
-	NULL, /* show_text_glyphs */
+	_cairo_binary_surface_has_show_text_glyphs, /* has_show_text_glyphs */
+	_cairo_binary_surface_show_text_glyphs, /* show_text_glyphs */
 	_cairo_binary_surface_get_supported_mime_types,
 };
 
